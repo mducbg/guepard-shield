@@ -346,7 +346,8 @@ Bổ sung (nếu relevant): weighted fidelity, class-conditional fidelity, eBPF 
 
 ### Lưu ý về class imbalance (1:1.3-1.5)
 
-- Dùng `class_weight='balanced'` trong surrogate training
+- **Không dùng** `class_weight='balanced'` trong surrogate training — pilot (P1.5) đã chứng minh balanced weights chỉ flip bias (normal recall tăng 68% → 96% nhưng attack recall giảm 99.8% → 75.2%), không cải thiện overall performance. Imbalance được xử lý ở data level qua `max_windows_per_seq`.
+- Soft labels từ teacher với temperature scaling tự nhiên cung cấp boundary calibration tốt hơn bất kỳ manual class weighting nào (pilot: distilled DT đạt normal recall 88% + attack recall 99.5% mà không cần class weighting).
 - Metric chính: F1 và FPR@fixed_FNR thay vì accuracy
 - Attack-class Fidelity là primary metric cho ablation (tránh bị dominated bởi normal class)
 
@@ -379,11 +380,17 @@ Bổ sung (nếu relevant): weighted fidelity, class-conditional fidelity, eBPF 
 
 ### Target venues (rank B+)
 
+**Hướng A — Security venue (framing: syscall anomaly detection + rule enforcement):**
 - **RAID** (International Symposium on Research in Attacks, Intrusions and Defenses) — rank A, competitive nhưng phù hợp nhất
 - **ACSAC** (Annual Computer Security Applications Conference) — rank A, applied security focus
 - **DIMVA** (Detection of Intrusions and Malware & Vulnerability Assessment) — rank B, European, acceptance ~25-30%
 - **SecureComm** — rank B, practical security
 - **AsiaCCS workshop track** — dễ nhất, tốt cho first publication
+
+**Hướng B — Networking venue (framing: runtime enforcement for containerized network services):**
+- **IEEE Globecom** — rank B, IEEE ComSoc, có symposium "Communication & Information Systems Security"
+- **IEEE ICC** — rank B, tương đương Globecom, deadline thường tháng 1
+- Framing cần anchor vào: microservices, cloud-native network functions, container orchestration — không frame thuần syscall IDS
 
 ### Paper framing (KHÔNG frame là bài KD/XAI)
 

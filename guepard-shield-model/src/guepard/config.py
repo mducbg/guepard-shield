@@ -28,7 +28,6 @@ class TeacherConfig:
     lr: float = 1e-4
     weight_decay: float = 1e-2
     temperature: float = 1.0
-    backend: str = "jax"  # sets KERAS_BACKEND at import time
 
 
 @dataclass

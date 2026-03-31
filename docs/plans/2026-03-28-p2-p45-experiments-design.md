@@ -151,7 +151,7 @@ Percentile-based thresholds → tự adapt theo workload intensity, không cần
 **Output artifacts:**
 ```
 results/p2/
-├── best_teacher_lidds.weights.h5
+├── best_teacher_lidds.ckpt
 ├── teacher_comparison.json      # BiLSTM vs Transformer metrics
 ├── temperature_sweep.json       # T → Attack Fidelity mapping
 └── p2_checkpoint.json           # pass/fail cho 3 checkpoint criteria
@@ -163,8 +163,8 @@ results/p2/
 
 ### 5.1 Feature Selection (`shap_selector.py`)
 
-- **Layer TF-IDF (surrogate features):** dùng `sklearn.inspection.permutation_importance` trên DT-Hard-Full — nhanh, không phụ thuộc backend, cho rank feature importance đáng tin cậy. `shap.DeepExplainer` không hỗ trợ JAX; `shap.KernelExplainer` với 1000 features quá chậm.
-- **Layer embedding (Teacher interpretability, optional):** `shap.GradientExplainer` với `jax.grad` wrapper nếu cần visualize attention pattern — chỉ dùng cho thesis discussion, không dùng cho feature selection pipeline.
+- **Layer TF-IDF (surrogate features):** dùng `sklearn.inspection.permutation_importance` trên DT-Hard-Full — nhanh, không phụ thuộc backend, cho rank feature importance đáng tin cậy. `shap.KernelExplainer` với 1000 features quá chậm.
+- **Layer embedding (Teacher interpretability, optional):** `shap.GradientExplainer` với PyTorch autograd nếu cần visualize attention pattern — chỉ dùng cho thesis discussion, không dùng cho feature selection pipeline.
 - Top-K = top 100 features theo mean permutation importance trên val set
 - K = 100 là default; K là ablation parameter nếu cần sensitivity analysis
 - Đổi tên artifact: `perm_importance.npy` thay vì `shap_values.npy`

@@ -1,115 +1,81 @@
-import keras
+import torch
+import torch.nn as nn
 
 from ..config import TeacherConfig
 
 
-def _compute_loss(y, y_pred, temperature):
-    """Shared soft/hard label loss for teacher models."""
-    y = keras.ops.convert_to_tensor(y)
-    if keras.backend.is_float_dtype(y.dtype):
-        soft_pred = keras.ops.softmax(y_pred / temperature)
-        return keras.ops.mean(keras.losses.categorical_crossentropy(y, soft_pred))
-    return keras.ops.mean(
-        keras.losses.sparse_categorical_crossentropy(y, y_pred, from_logits=True)
-    )
-
-
-class SyscallLSTM(keras.Model):
+class SyscallLSTM(nn.Module):
     """
     Bidirectional LSTM teacher model. Fewer parameters than Transformer,
     better inductive bias for sequential syscall data on small datasets.
     """
 
-    def __init__(self, config: TeacherConfig, **kwargs):
-        super().__init__(**kwargs)
-        self.temperature = config.temperature
-        # mask_zero=True propagates padding mask to LSTM
-        self.embedding = keras.layers.Embedding(
-            config.vocab_size, config.d_model, mask_zero=True
+    def __init__(self, config: TeacherConfig):
+        super().__init__()
+        self.embedding = nn.Embedding(config.vocab_size, config.d_model, padding_idx=0)
+        self.lstm = nn.LSTM(
+            input_size=config.d_model,
+            hidden_size=config.d_model // 2,
+            bidirectional=True,
+            batch_first=True,
         )
-        self.lstm = keras.layers.Bidirectional(
-            keras.layers.LSTM(config.d_model // 2, dropout=config.dropout)
-        )
-        self.dropout = keras.layers.Dropout(config.dropout)
-        self.classifier = keras.layers.Dense(2)
+        self.dropout = nn.Dropout(config.dropout)
+        self.classifier = nn.Linear(config.d_model, 2)
 
-    def call(self, token_ids, training=False):
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         x = self.embedding(token_ids)
-        x = self.lstm(x, training=training)
-        x = self.dropout(x, training=training)
-        return self.classifier(x)
-
-    def compute_loss(self, x=None, y=None, y_pred=None, sample_weight=None):
-        if y is None or y_pred is None:
-            return super().compute_loss(x, y, y_pred, sample_weight)
-        return _compute_loss(y, y_pred, self.temperature)
-
-
-class TransformerBlock(keras.layers.Layer):
-    """
-    Standard Transformer encoder block.
-    """
-
-    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float, **kwargs):
-        super().__init__(**kwargs)
-        self.attn = keras.layers.MultiHeadAttention(
-            num_heads=n_heads, key_dim=d_model // n_heads
+        # pack_padded_sequence requires CPU lengths — unavoidable .cpu() sync
+        lengths = (token_ids != 0).sum(dim=1).clamp(min=1).cpu()
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, lengths, batch_first=True, enforce_sorted=False
         )
-        self.ffn = keras.Sequential(
+        _, (h, _) = self.lstm(packed)
+        h = torch.cat([h[0], h[1]], dim=-1)  # (B, d_model)
+        return self.classifier(self.dropout(h))
+
+
+class TransformerBlock(nn.Module):
+    """Standard Transformer encoder block."""
+
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(
+            embed_dim=d_model, num_heads=n_heads, dropout=dropout, batch_first=True
+        )
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.ReLU(),
+            nn.Linear(d_ff, d_model),
+        )
+        self.norm1 = nn.LayerNorm(d_model, eps=1e-6)
+        self.norm2 = nn.LayerNorm(d_model, eps=1e-6)
+        self.drop1 = nn.Dropout(dropout)
+        self.drop2 = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        attn_out, _ = self.attn(x, x, x)
+        x = self.norm1(x + self.drop1(attn_out))
+        return self.norm2(x + self.drop2(self.ffn(x)))
+
+
+class SyscallTransformer(nn.Module):
+    """Teacher transformer model for syscall sequence classification."""
+
+    def __init__(self, config: TeacherConfig, window_size: int):
+        super().__init__()
+        self.embedding = nn.Embedding(config.vocab_size, config.d_model)
+        self.pos_embedding = nn.Embedding(window_size + 1, config.d_model)
+        self.blocks = nn.ModuleList(
             [
-                keras.layers.Dense(d_ff, activation="relu"),
-                keras.layers.Dense(d_model),
+                TransformerBlock(config.d_model, config.n_heads, config.d_ff, config.dropout)
+                for _ in range(config.n_layers)
             ]
         )
-        self.norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
-        self.drop1 = keras.layers.Dropout(dropout)
-        self.drop2 = keras.layers.Dropout(dropout)
+        self.classifier = nn.Linear(config.d_model, 2)
 
-    def call(self, x, training=False):
-        attn_out = self.attn(x, x, training=training)
-        x = self.norm1(x + self.drop1(attn_out, training=training))
-        ffn_out = self.ffn(x, training=training)
-        return self.norm2(x + self.drop2(ffn_out, training=training))
-
-
-class SyscallTransformer(keras.Model):
-    """
-    Teacher transformer model implementation for the DongTing P1.5 pilot.
-    """
-
-    def __init__(self, config: TeacherConfig, window_size: int, **kwargs):
-        super().__init__(**kwargs)
-        self.temperature = config.temperature
-        self.embedding = keras.layers.Embedding(config.vocab_size, config.d_model)
-
-        # Position embedding
-        self.pos_embedding = keras.layers.Embedding(window_size + 1, config.d_model)
-
-        self.blocks = [
-            TransformerBlock(
-                config.d_model, config.n_heads, config.d_ff, config.dropout
-            )
-            for _ in range(config.n_layers)
-        ]
-
-        # We use sequence mean pooling since the data loader doesn't prepend a [CLS] token
-        self.pooling = keras.layers.GlobalAveragePooling1D()
-        self.classifier = keras.layers.Dense(2)
-
-    def call(self, token_ids, training=False):
-        seq_len = keras.ops.shape(token_ids)[1]
-        positions = keras.ops.arange(start=0, stop=seq_len, step=1)
-
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        positions = torch.arange(token_ids.shape[1], device=token_ids.device)
         x = self.embedding(token_ids) + self.pos_embedding(positions)
-
         for block in self.blocks:
-            x = block(x, training=training)
-
-        pooled = self.pooling(x)
-        return self.classifier(pooled)
-
-    def compute_loss(self, x=None, y=None, y_pred=None, sample_weight=None):
-        if y is None or y_pred is None:
-            return super().compute_loss(x, y, y_pred, sample_weight)
-        return _compute_loss(y, y_pred, self.temperature)
+            x = block(x)
+        return self.classifier(x.mean(dim=1))

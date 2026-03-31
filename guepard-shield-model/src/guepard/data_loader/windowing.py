@@ -12,7 +12,7 @@ class WindowMeta:
     seq_id: str  # Global ID from Baseline.csv
     label: int  # Ground truth class
     start_idx: int  # Window start position in the sequence
-    window_length: int  # Length of this specific window (often config.window_size)
+    window_length: int  # Length of this specific window
     file_path: Path  # Path to the raw sequence file
 
 

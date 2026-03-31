@@ -1,16 +1,7 @@
 # %%
-"""
-Full-corpus diagnostic script — distributions, correlations, statistical tests.
-Run: cd guepard-shield-model && uv run python notebooks/diagnostic.py
-Outputs: results/diagnostic/*.png
-"""
 
-import os
 from collections import Counter, defaultdict
 from pathlib import Path
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +16,7 @@ from tqdm import tqdm
 
 console = Console()
 
-DATA_DIR = "data/processed/DongTing"
+DATA_DIR = "../data/processed/DongTing"
 OUTPUT_DIR = Path("results/diagnostic")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

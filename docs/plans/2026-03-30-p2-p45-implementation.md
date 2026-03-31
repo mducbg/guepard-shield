@@ -6,7 +6,7 @@
 
 **Architecture:** BiLSTM/Transformer Teacher trained on LID-DS-2021, knowledge distilled into DT + RuleFit surrogates via soft labels, rules compiled to eBPF enforcement layer.
 
-**Tech Stack:** JAX/Keras (Teacher), scikit-learn (DT, permutation importance), imodels (RuleFit), Aya/Rust (eBPF), polars, matplotlib.
+**Tech Stack:** PyTorch Lightning + PyTorch (Teacher), scikit-learn (DT, permutation importance), imodels (RuleFit), Aya/Rust (eBPF), polars, matplotlib.
 
 **No commits between tasks** — commit only at phase boundaries (end of P2, P3, P4, P4.5).
 
@@ -14,16 +14,11 @@
 
 ## Memory Budget (6GB VRAM RTX 3060, 32GB RAM)
 
-Set at top of every notebook script:
-```python
-import os
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.85"  # 5.1GB usable
-```
+PyTorch manages GPU memory dynamically. No env vars needed for memory fraction.
 
 **Teacher configs that fit in 6GB:**
-- BiLSTM: `d_model=128, dropout=0.1` → ~50MB weights, batch_size=64 safe
-- Transformer: `d_model=128, n_heads=4, n_layers=4, d_ff=256` → ~15MB weights, batch_size=32 safe (attention is O(seq²))
+- BiLSTM: `d_model=128, dropout=0.1` → ~50MB weights, batch_size=1024 safe (no attention overhead)
+- Transformer: `d_model=128, n_heads=4, n_layers=4, d_ff=256` → ~15MB weights, batch_size=256 safe (attention is O(seq²))
 - Window size = 64 tokens (existing `WindowConfig` default) — keep this
 
 **CPU-side (sklearn/imodels):**
@@ -45,7 +40,7 @@ Add to `dependencies`:
 
 Run: `cd guepard-shield-model && uv sync`
 
-`shap` is only used for `GradientExplainer` on Teacher embeddings (thesis discussion). Feature selection uses `sklearn.inspection.permutation_importance` — already available.
+`shap` is only used for `GradientExplainer` on Teacher embeddings via PyTorch autograd (thesis discussion). Feature selection uses `sklearn.inspection.permutation_importance` — already available.
 
 ---
 
@@ -188,9 +183,8 @@ def rule_complexity(tree_or_rules) -> int:
 ```
 Step 1: Config
   - LIDDSConfig: scenarios (5 in-dist), data_dir, output_dir
-  - TeacherConfig: d_model=128, n_heads=4, n_layers=4, d_ff=256, batch_size=32 (Transformer)
-                   d_model=128, batch_size=64 (BiLSTM)
-  - Set XLA_PYTHON_CLIENT_MEM_FRACTION=0.85
+  - TeacherConfig: d_model=128, n_heads=4, n_layers=4, d_ff=256, batch_size=256 (Transformer)
+                   d_model=128, batch_size=1024 (BiLSTM)
 
 Step 2: Load LID-DS (combined 5 in-dist scenarios)
   - LIDDSCorpus(data_dir, in_dist_scenarios)
@@ -200,7 +194,7 @@ Step 2: Load LID-DS (combined 5 in-dist scenarios)
 Step 3: Architecture Comparison
   - Train SyscallLSTM (BiLSTM) — 20 epochs, early stopping on val F1, patience=5
   - Train SyscallTransformer — same setup
-  - Save both: best_bilstm.weights.h5, best_transformer.weights.h5
+  - Save both: best_bilstm.ckpt, best_transformer.ckpt
   - Log: teacher_comparison.json → {bilstm: {f1, accuracy}, transformer: {f1, accuracy}}
   - Winner = higher val F1. Must be ≥ 0.90 to proceed.
 
@@ -233,9 +227,9 @@ Step 7: P2 Checkpoint Validation
 **Output artifacts:** `results/p2/` — see design doc §4.3.
 
 **Memory notes:**
-- Transformer with window=64, batch=32: activation memory ~150MB → safe
-- Use `jax.clear_caches()` between BiLSTM and Transformer training to free XLA cache
-- Soft label generation: `jax.device_get()` after each batch to avoid accumulation on GPU
+- Transformer with window=64, batch=256: activation memory ~150MB → safe
+- Use `torch.cuda.empty_cache()` between BiLSTM and Transformer training to free GPU memory
+- Soft label generation: `.cpu().numpy()` after each batch to avoid tensor accumulation on GPU
 
 ---
 

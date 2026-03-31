@@ -1,19 +1,17 @@
-# %%
-import os
-from pathlib import Path
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress XLA/JAX compiler spam
 import datetime
 import json
+import warnings
+from pathlib import Path
 
-import jax
-import keras
+import lightning as L
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
+import torch
+import torch.nn.functional as F
 from guepard.config import TeacherConfig, WindowConfig
 from guepard.data_loader.corpus import DongTingCorpus
+from guepard.data_loader.datamodule import TeacherDataModule
 from guepard.data_loader.surrogate_dataset import SurrogateDataset
 from guepard.data_loader.teacher_dataset import TeacherDataset
 from guepard.data_loader.vocab import SyscallVocab
@@ -21,18 +19,29 @@ from guepard.data_loader.windowing import num_sliding_windows
 from guepard.features.vectorizer import SyscallVectorizer
 from guepard.models.surrogate import SurrogateDT
 from guepard.models.teacher import SyscallLSTM
+from guepard.training.teacher_module import TeacherLightningModule
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.metrics import confusion_matrix
+from torch import nn
+from torch.serialization import SourceChangeWarning
+from torch.utils.data import DataLoader
+
+warnings.filterwarnings("ignore", category=SourceChangeWarning)
+warnings.filterwarnings("ignore", message=".*LeafSpec.*deprecated.*")
+torch.set_float32_matmul_precision("medium")
 
 # %%
-print(jax.devices())
-print(f"Default backend: {jax.default_backend()}")
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA device: {torch.cuda.get_device_name(0)}")
 
 # %% [markdown]
 # ## 1. Setup Data Paths & Output Directory
 
 # %%
 data_dir = "../data/processed/DongTing"
-output_dir = "../results/pilot/no-class-weight"
+output_dir = "../results/pilot/no-class-weight-torch"
 
 output_path = Path(output_dir)
 output_path.mkdir(parents=True, exist_ok=True)
@@ -47,7 +56,7 @@ print("Loading Corpus...")
 corpus = DongTingCorpus(data_dir)
 
 # Note: We limit sequence lengths here for pilot speed.
-LIMIT = 2000
+LIMIT = 500
 
 # Extract subsets robustly to guarantee a validation split exists
 all_train = corpus.get_split("DTDS-train")
@@ -65,7 +74,7 @@ val_normal = normal_metas[int(half_limit * 0.8) : half_limit]
 train_metas = train_abnormal + train_normal
 val_metas = val_abnormal + val_normal
 
-# Override metadata logic for the PyDataset fetchers
+# Override metadata logic for the dataset fetchers
 for m in train_metas:
     m.seq_class = "pilot-train"
 for m in val_metas:
@@ -159,79 +168,107 @@ vectorizer.fit(corpus.iter_corpus(), total=n_seqs)
 # %%
 print("Building Datasets...")
 window_config = WindowConfig(window_size=64, stride=12)
-# Cap windows per sequence to reduce class imbalance (diagnostic: 125:1 → ~2:1)
-# P90 of normal class = 21; capping attack sequences at same value balances training signal.
-MAX_WINDOWS = (
-    5  # set near avg natural windows of normal class (~4.5) to balance window ratio
-)
+MAX_WINDOWS = 5
+BATCH_SIZE = 1024
 
-train_ds = TeacherDataset(
+datamodule = TeacherDataModule(
     corpus=corpus,
     vocab=vocab,
     window_config=window_config,
-    split_name="pilot-train",
-    batch_size=1024,
-    shuffle=True,
+    train_split="pilot-train",
+    val_split="pilot-evaluation",
+    batch_size=BATCH_SIZE,
     max_windows_per_seq=MAX_WINDOWS,
 )
-val_ds = TeacherDataset(
-    corpus=corpus,
-    vocab=vocab,
-    window_config=window_config,
-    split_name="pilot-evaluation",
-    batch_size=1024,
-    shuffle=False,
-    max_windows_per_seq=MAX_WINDOWS,
-)
-print(f"Train batches: {len(train_ds)}, Val batches: {len(val_ds)}")
 
+print(
+    f"Train samples: {len(datamodule.train_dataset)}, "
+    f"Val samples: {len(datamodule.val_dataset)}"
+)
 
 # %% [markdown]
 # ## 5. Build & Train Teacher Model
+
+
 # %%
-print("Building & Compiling Teacher Model (BiLSTM)...")
+class DatasetReshuffleCallback(L.Callback):
+    """Rebuilds sequence-level shuffle order after each training epoch."""
+
+    def __init__(self, datamodule: TeacherDataModule):
+        self.datamodule = datamodule
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if self.datamodule.train_dataset is not None:
+            self.datamodule.train_dataset.reshuffle()
+
+
+class MetricsHistory(L.Callback):
+    """Collects per-epoch metrics, mirroring Keras history.history."""
+
+    def __init__(self):
+        self.history: dict[str, list] = {
+            "loss": [],
+            "val_loss": [],
+            "accuracy": [],
+            "val_accuracy": [],
+        }
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        self.history["loss"].append(
+            float(trainer.callback_metrics.get("train_loss", 0))
+        )
+        self.history["accuracy"].append(
+            float(trainer.callback_metrics.get("train_accuracy", 0))
+        )
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        self.history["val_loss"].append(
+            float(trainer.callback_metrics.get("val_loss", 0))
+        )
+        self.history["val_accuracy"].append(
+            float(trainer.callback_metrics.get("val_accuracy", 0))
+        )
+
+
+print("Building Teacher Model (BiLSTM)...")
 teacher_config = TeacherConfig(vocab_size=len(vocab), temperature=4.0)
 teacher_model = SyscallLSTM(teacher_config)
+module = TeacherLightningModule(teacher_model, teacher_config)
 
-optimizer = keras.optimizers.AdamW(
-    learning_rate=teacher_config.lr, weight_decay=teacher_config.weight_decay
-)
-teacher_model.compile(
-    optimizer=optimizer,
-    metrics=[keras.metrics.SparseCategoricalAccuracy(name="accuracy")],
-)
-
-# Trigger model build with dummy batch
-dummy_x, dummy_y = train_ds[0]
-teacher_model(dummy_x)
-teacher_model.summary()
+metrics_history = MetricsHistory()
 
 callbacks = [
-    keras.callbacks.ModelCheckpoint(
-        filepath=str(output_path / "best_teacher.weights.h5"),
-        save_best_only=True,
-        save_weights_only=True,
+    ModelCheckpoint(
+        dirpath=str(output_path),
+        filename="best_teacher",
+        monitor="val_loss",
+        save_top_k=1,
+        mode="min",
     ),
-    keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True),
+    EarlyStopping(monitor="val_loss", patience=10, mode="min"),
+    DatasetReshuffleCallback(datamodule),
+    metrics_history,
 ]
 
-print("Training Teacher...")
-history = teacher_model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=50,
+trainer = L.Trainer(
+    max_epochs=50,
     callbacks=callbacks,
+    enable_progress_bar=True,
+    log_every_n_steps=1,
 )
+
+print("Training Teacher...")
+trainer.fit(module, datamodule)
 
 # Plot training history
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-axes[0].plot(history.history["loss"], label="train")
-axes[0].plot(history.history["val_loss"], label="val")
+axes[0].plot(metrics_history.history["loss"], label="train")
+axes[0].plot(metrics_history.history["val_loss"], label="val")
 axes[0].set_title("Loss")
 axes[0].set_xlabel("Epoch")
 axes[0].legend()
-axes[1].plot(history.history["accuracy"], label="train")
-axes[1].plot(history.history["val_accuracy"], label="val")
+axes[1].plot(metrics_history.history["accuracy"], label="train")
+axes[1].plot(metrics_history.history["val_accuracy"], label="val")
 axes[1].set_title("Accuracy")
 axes[1].set_xlabel("Epoch")
 axes[1].legend()
@@ -245,12 +282,13 @@ print("Saved: training_history.png")
 
 # %%
 print("Extracting predictions & resolving SurrogateDT features...")
+
 extract_train_ds = TeacherDataset(
     corpus=corpus,
     vocab=vocab,
     window_config=window_config,
     split_name="pilot-train",
-    batch_size=1024,
+    batch_size=BATCH_SIZE,
     shuffle=False,
     max_windows_per_seq=MAX_WINDOWS,
 )
@@ -261,7 +299,7 @@ surrogate_train_ds = SurrogateDataset(
     window_config=window_config,
     split_name="pilot-train",
     label_source="hard",
-    batch_size=1024,
+    batch_size=BATCH_SIZE,
     shuffle=False,
     max_windows_per_seq=MAX_WINDOWS,
 )
@@ -271,7 +309,7 @@ extract_val_ds = TeacherDataset(
     vocab=vocab,
     window_config=window_config,
     split_name="pilot-evaluation",
-    batch_size=1024,
+    batch_size=BATCH_SIZE,
     shuffle=False,
     max_windows_per_seq=MAX_WINDOWS,
 )
@@ -282,43 +320,46 @@ surrogate_val_ds = SurrogateDataset(
     window_config=window_config,
     split_name="pilot-evaluation",
     label_source="hard",
-    batch_size=1024,
+    batch_size=BATCH_SIZE,
     shuffle=False,
     max_windows_per_seq=MAX_WINDOWS,
 )
 
 
-def extract_features_and_soft_labels(surrogate_dataset, teacher_dataset):
-    """Extract all windows — no limit_batches, use full dataset.
-
-    Pass 1: collect TF-IDF features, hard labels, and token ID batches (cheap).
-    Pass 2: single model.predict() over all tokens — one JIT compile, full GPU util.
-    """
+def extract_features_and_soft_labels(
+    surrogate_dataset: SurrogateDataset,
+    teacher_dataset: TeacherDataset,
+    model: nn.Module,
+    temperature: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Single-pass extraction: TF-IDF features, hard labels, and soft labels."""
     assert len(surrogate_dataset) == len(teacher_dataset), (
         f"Dataset length mismatch: surrogate={len(surrogate_dataset)} teacher={len(teacher_dataset)}"
     )
-    f_list, h_list, token_list = [], [], []
-    for i in range(len(surrogate_dataset)):
-        feats, hard_y = surrogate_dataset[i]
-        token_ids, _ = teacher_dataset[i]
-        f_list.append(feats)
-        h_list.append(hard_y)
-        token_list.append(token_ids)
-
-    all_tokens = np.vstack(token_list)  # (N, window_size) int32
-    logits = teacher_model.predict(all_tokens, batch_size=1024, verbose=1)
-    soft_y = keras.ops.softmax(logits / teacher_config.temperature)
-
-    return (
-        np.vstack(f_list),
-        np.concatenate(h_list),
-        np.array(soft_y),
+    device = next(model.parameters()).device
+    surrogate_loader = DataLoader(
+        surrogate_dataset, batch_size=BATCH_SIZE, shuffle=False
     )
+    teacher_loader = DataLoader(teacher_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
+    f_list, h_list, logits_list = [], [], []
+    model.eval()
+    with torch.no_grad():
+        for (feats, hard_y), (token_ids, _) in zip(surrogate_loader, teacher_loader):
+            f_list.append(feats.numpy())
+            h_list.append(hard_y.numpy())
+            logits_list.append(model(token_ids.to(device)).cpu())
+
+    logits = torch.cat(logits_list, dim=0)
+    soft_y = F.softmax(logits / temperature, dim=-1).numpy()
+    return np.vstack(f_list), np.concatenate(h_list), soft_y
+
+
+model_eval = module.model
 
 print("   Extracting Training features (all batches)...")
 X_train, y_hard_train, y_soft_train = extract_features_and_soft_labels(
-    surrogate_train_ds, extract_train_ds
+    surrogate_train_ds, extract_train_ds, model_eval, teacher_config.temperature
 )
 print(
     f"   Train: {X_train.shape[0]} windows, label balance: "
@@ -328,7 +369,7 @@ print(
 
 print("   Extracting Validation features (all batches)...")
 X_val, y_hard_val, y_soft_val = extract_features_and_soft_labels(
-    surrogate_val_ds, extract_val_ds
+    surrogate_val_ds, extract_val_ds, model_eval, teacher_config.temperature
 )
 print(
     f"   Val:   {X_val.shape[0]} windows, label balance: "
@@ -446,8 +487,6 @@ print("Saved: feature_heatmap.png")
 # ## 9. Save Results
 
 # %%
-
-
 results_record = {
     "timestamp": datetime.datetime.now().isoformat(),
     "config": {
@@ -455,7 +494,7 @@ results_record = {
         "max_windows_per_seq": MAX_WINDOWS,
         "window_size": window_config.window_size,
         "stride": window_config.stride,
-        "batch_size": train_ds.batch_size,
+        "batch_size": BATCH_SIZE,
         "temperature": teacher_config.temperature,
         "d_model": teacher_config.d_model,
         "vocab_size": len(vocab),
@@ -464,9 +503,9 @@ results_record = {
         "surrogate_max_depth": surrogate.direct_model.max_depth,
     },
     "teacher": {
-        "val_accuracy": float(max(history.history["val_accuracy"])),
-        "val_loss_final": float(history.history["val_loss"][-1]),
-        "epochs_trained": len(history.history["loss"]),
+        "val_accuracy": float(max(metrics_history.history["val_accuracy"])),
+        "val_loss_final": float(metrics_history.history["val_loss"][-1]),
+        "epochs_trained": len(metrics_history.history["loss"]),
     },
     "window_balance": {
         "train_normal": int((y_hard_train == 0).sum()),
@@ -481,5 +520,3 @@ results_path = output_path / "pilot_results.json"
 with open(results_path, "w") as f:
     json.dump(results_record, f, indent=2)
 print(f"Saved: {results_path}")
-
-# %%

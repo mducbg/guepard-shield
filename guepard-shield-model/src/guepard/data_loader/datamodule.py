@@ -4,7 +4,7 @@ import lightning as L
 from torch.utils.data import DataLoader
 
 from ..config import WindowConfig
-from .teacher_dataset import TeacherDataset, TokenReader
+from .teacher_dataset import TeacherDataset, TokenReader, WindowLabelFn
 from .vocab import SyscallVocab
 
 
@@ -39,6 +39,7 @@ class TeacherDataModule(L.LightningDataModule):
         max_windows_per_seq: Optional[int] = None,
         seed: int = 42,
         token_reader: Optional[TokenReader] = None,
+        window_label_fn: Optional[WindowLabelFn] = None,
         num_workers: int = 0,
     ):
         super().__init__()
@@ -51,6 +52,7 @@ class TeacherDataModule(L.LightningDataModule):
         self.max_windows_per_seq = max_windows_per_seq
         self.seed = seed
         self.token_reader = token_reader
+        self.window_label_fn = window_label_fn
         self.num_workers = num_workers
 
         self.train_dataset: TeacherDataset = TeacherDataset(
@@ -63,6 +65,7 @@ class TeacherDataModule(L.LightningDataModule):
             max_windows_per_seq=max_windows_per_seq,
             seed=self.seed,
             token_reader=token_reader,
+            window_label_fn=window_label_fn,
         )
         self.val_dataset: TeacherDataset = TeacherDataset(
             corpus=corpus,
@@ -74,6 +77,7 @@ class TeacherDataModule(L.LightningDataModule):
             max_windows_per_seq=max_windows_per_seq,
             seed=self.seed,
             token_reader=token_reader,
+            window_label_fn=window_label_fn,
         )
 
     def train_dataloader(self):

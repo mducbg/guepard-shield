@@ -6,11 +6,16 @@ import numpy as np
 from torch.utils.data import Dataset
 
 from ..config import WindowConfig
+from .corpus import SequenceMeta
 from .vocab import SyscallVocab
 from .windowing import extract_window_tokens, get_window_meta, num_sliding_windows
 
 # Type alias for the token reader function (file_path_str → token list).
 TokenReader = Callable[[str], List[str]]
+
+# Optional window-level label override: (seq_meta, win_start, win_end) -> int.
+# When provided, replaces the recording-level label for each window.
+WindowLabelFn = Callable[[SequenceMeta, int, int], int]
 
 
 @lru_cache(maxsize=8)
@@ -53,6 +58,7 @@ class TeacherDataset(Dataset):
         max_windows_per_seq: Optional[int] = None,
         seed: int = 42,
         token_reader: Optional[TokenReader] = None,
+        window_label_fn: Optional[WindowLabelFn] = None,
     ):
         super().__init__()
         self.corpus = corpus
@@ -63,6 +69,7 @@ class TeacherDataset(Dataset):
         self.max_windows_per_seq = max_windows_per_seq
         self._seed = seed
         self._token_reader: TokenReader = token_reader or _read_tokens_from_file
+        self._window_label_fn: Optional[WindowLabelFn] = window_label_fn
 
         # Cache constants to avoid repeated dict lookups in __getitem__
         if vocab is not None:
@@ -127,4 +134,11 @@ class TeacherDataset(Dataset):
         if len(ids) < self.window_size:
             ids.extend([self.pad_id] * (self.window_size - len(ids)))
 
-        return np.array(ids, dtype=np.int32), np.array(meta.label, dtype=np.int32)
+        if self._window_label_fn is not None:
+            label = self._window_label_fn(
+                seq_meta, meta.start_idx, meta.start_idx + meta.window_length
+            )
+        else:
+            label = meta.label
+
+        return np.array(ids, dtype=np.int32), np.array(label, dtype=np.int32)

@@ -44,14 +44,14 @@ Pipeline **RuleDistill** — dùng Transformer làm Teacher Oracle để distill
 
 ## 3. Research Questions & Hypotheses
 
-| RQ      | Câu hỏi                                                                        | Giả thuyết                                                                                |
-| ------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| RQ      | Câu hỏi                                                                        | Giả thuyết                                                                                                                                                                                                  |
+| ------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RQ1** | Phương pháp nào đạt cân bằng tốt nhất giữa Fidelity, FPR, và Rule Complexity?  | H1: Tree family (DT, HSTree, FIGS) và Rule ensemble (RuleFit, BoostedRules) đạt Fidelity >95% với rule set compact. FIGS đạt fidelity cao hơn single DT nhờ additive structure mà vẫn giữ interpretability. |
-| **RQ2** | Distillation có tạo rule tốt hơn train trực tiếp trên hard labels không?       | H2: Distillation cải thiện Attack-class Fidelity ≥3-5%, đặc biệt cho multi-stage attacks. |
-| **RQ3** | Rich features (thread, timing, args) cải thiện bao nhiêu so với sequence-only? | H3: Tier 2 features cải thiện Fidelity trên LID-DS, đặc biệt cross-thread attacks.        |
-| **RQ4** | Rule generalize cross-scenario/cross-domain đến mức nào?                       | H4: OOD fidelity thấp hơn nhưng Feedback Loop thu hẹp gap sau 2-3 chu kỳ.                 |
-| **RQ5** | Phase-aware rule set có giảm FPR so với single-policy không?                   | H5: Per-phase surrogate giảm FPR ≥15% so với single-policy trên cùng Teacher.             |
-| **RQ6** | Rule sinh ra deploy được trên eBPF với overhead chấp nhận được không?          | H6: Latency < 2µs/syscall, FPR trên real workload < 5%.                                   |
+| **RQ2** | Distillation có tạo rule tốt hơn train trực tiếp trên hard labels không?       | H2: Distillation cải thiện Attack-class Fidelity ≥3-5%, đặc biệt cho multi-stage attacks.                                                                                                                   |
+| **RQ3** | Rich features (thread, timing, args) cải thiện bao nhiêu so với sequence-only? | H3: Tier 2 features cải thiện Fidelity trên LID-DS, đặc biệt cross-thread attacks.                                                                                                                          |
+| **RQ4** | Rule generalize cross-scenario/cross-domain đến mức nào?                       | H4: OOD fidelity thấp hơn nhưng Feedback Loop thu hẹp gap sau 2-3 chu kỳ.                                                                                                                                   |
+| **RQ5** | Phase-aware rule set có giảm FPR so với single-policy không?                   | H5: Per-phase surrogate giảm FPR ≥15% so với single-policy trên cùng Teacher.                                                                                                                               |
+| **RQ6** | Rule sinh ra deploy được trên eBPF với overhead chấp nhận được không?          | H6: Latency < 2µs/syscall, FPR trên real workload < 5%.                                                                                                                                                     |
 
 > RQ1-RQ2 là core ML contribution. RQ5-RQ6 là core security contribution. RQ3-RQ4 là extension.
 
@@ -129,18 +129,18 @@ Tier 2 (multi-thread, rich features) chỉ trên LID-DS — extension goal.
 
 ### Core (phải hoàn thành — đủ cho thesis)
 
-| #   | Nội dung                                                                                            | Trả lời      |
-| --- | --------------------------------------------------------------------------------------------------- | ------------ |
-| C1  | **Teacher training**, F1 ≥ 90%                                                                      | Prerequisite |
-| C2  | **SHAP feature selection** — rank feature importance từ Teacher, chọn top-K làm input cho surrogate | RQ1          |
+| #   | Nội dung                                                                                                                                     | Trả lời      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| C1  | **Teacher training**, F1 ≥ 90%                                                                                                               | Prerequisite |
+| C2  | **SHAP feature selection** — rank feature importance từ Teacher, chọn top-K làm input cho surrogate                                          | RQ1          |
 | C3  | **Exp B: Tree Family** — DT, HSTree (hierarchical shrinkage), FIGS (sum of small trees); distilled vs direct, full features vs SHAP-selected | RQ1, RQ2     |
-| C4  | **Exp C: Rule Ensemble** — RuleFit, BoostedRules; distilled vs direct, full features vs SHAP-selected | RQ1, RQ2     |
-| C5  | **Ablation study** distilled vs direct trên B, C                                                    | RQ2          |
-| C6  | **Phase-aware ablation** — single-policy vs per-phase surrogate trên cùng Teacher                   | RQ5          |
-| C7  | **Rule analysis + MITRE mapping** — xem chi tiết bên dưới                                           | RQ1          |
-| C8  | **Cross-domain validation** — train LID-DS → test DongTing (hoặc ngược lại)                         | RQ4 (basic)  |
-| C9  | **eBPF Rule Compiler** — compile DT rules thành if-else chain, verify bằng BPF verifier, đo latency | RQ6          |
-| C10 | **Real workload evaluation** — đo FPR và latency trên production-like application                   | RQ6          |
+| C4  | **Exp C: Rule Ensemble** — RuleFit, BoostedRules; distilled vs direct, full features vs SHAP-selected                                        | RQ1, RQ2     |
+| C5  | **Ablation study** distilled vs direct trên B, C                                                                                             | RQ2          |
+| C6  | **Phase-aware ablation** — single-policy vs per-phase surrogate trên cùng Teacher                                                            | RQ5          |
+| C7  | **Rule analysis + MITRE mapping** — xem chi tiết bên dưới                                                                                    | RQ1          |
+| C8  | **Cross-domain validation** — train LID-DS → test DongTing (hoặc ngược lại)                                                                  | RQ4 (basic)  |
+| C9  | **eBPF Rule Compiler** — compile DT rules thành if-else chain, verify bằng BPF verifier, đo latency                                          | RQ6          |
+| C10 | **Real workload evaluation** — đo FPR và latency trên production-like application                                                            | RQ6          |
 
 > **SHAP role:** Không phải experiment độc lập — là preprocessing step cho C3/C4. Tạo thêm một ablation tự nhiên (full vs SHAP-selected features) mà không tốn nhiều công. Dùng `shap.TreeExplainer` hoặc `shap.DeepExplainer` tùy Teacher architecture.
 
@@ -222,14 +222,14 @@ Kết quả nào cũng là contribution:
 
 ### Extension Tier 1 (nếu core xong trước tháng 7)
 
-| #   | Nội dung                                                                                        | Trả lời  |
-| --- | ----------------------------------------------------------------------------------------------- | -------- |
-| E1  | **Exp D: Rule Lists** — BRL, CORELS, GreedyRuleList; ordered if-else-if rule list, thêm uncertainty routing angle | RQ1      |
-| E2  | **Exp E: Anchors** — per-attack-type conditions, so sánh với C7 MITRE mapping                   | RQ1      |
-| E3  | **Domain-informed priors** — MITRE/Falco structural priors cho surrogate B, C                   | RQ1      |
-| E4  | **OOD evaluation** — cross-scenario trên LID-DS-2021 (web → DB scenarios)                       | RQ4      |
-| E5  | **Thêm ablations** — window size, temperature T, tree depth Pareto frontier                     | RQ1, RQ2 |
-| E6  | **eBPF dynamic phase loading** — load per-phase rule set dựa trên proc.duration và syscall_rate | RQ5, RQ6 |
+| #   | Nội dung                                                                                                                                                                                                                       | Trả lời  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| E1  | **Exp D: Rule Lists** — BRL, CORELS, GreedyRuleList; ordered if-else-if rule list, thêm uncertainty routing angle                                                                                                              | RQ1      |
+| E2  | **Exp E: Anchors** — per-attack-type conditions, so sánh với C7 MITRE mapping                                                                                                                                                  | RQ1      |
+| E3  | **Domain-informed priors** — MITRE/Falco structural priors cho surrogate B, C                                                                                                                                                  | RQ1      |
+| E4  | **OOD evaluation** — cross-scenario trên LID-DS-2021 (web → DB scenarios)                                                                                                                                                      | RQ4      |
+| E5  | **Thêm ablations** — window size, temperature T, tree depth Pareto frontier                                                                                                                                                    | RQ1, RQ2 |
+| E6  | **eBPF dynamic phase loading** — load per-phase rule set dựa trên proc.duration và syscall_rate                                                                                                                                | RQ5, RQ6 |
 | E7  | **Exp F: SLIM** — Supersparse Linear Integer Model, sinh scoring system dạng integer; cực kỳ interpretable (analyst cộng điểm), cần features đã engineer thành n-gram counts. Dùng `imodels.SLIMClassifier` (requires `cvxpy`) | RQ1      |
 
 > **Anchors role:** Không thay thế DT/RuleFit (coverage thấp), nhưng complement tốt — tạo per-attack-type rules dạng `IF syscall_A AND syscall_B THEN attack (conf ≥ X%)`, dễ map sang MITRE hơn DT. Dùng `alibi` library. So sánh trực tiếp với rule set từ C7.
@@ -325,17 +325,17 @@ Bổ sung (nếu relevant): weighted fidelity, class-conditional fidelity, eBPF 
 
 **Framework so sánh — Tree family (Exp B) và Rule ensemble (Exp C):**
 
-| Method                              | Attack Fidel. | Overall Fidel. | FPR | #Rules | #Conds |
-| ----------------------------------- | ------------- | -------------- | --- | ------ | ------ |
-| DT-Hard-Label (full features)       |               |                |     |        |        |
-| DT-Soft-T1 (full features)          |               |                |     |        |        |
-| DT-Soft-T\* (full features)         |               |                |     |        |        |
-| DT-Soft-T\* (SHAP-selected)         |               |                |     |        |        |
-| HSTree-Soft-T\* (full features)     |               |                |     |        |        |
-| FIGS-Soft-T\* (full features)       |               |                |     |        |        |
-| RuleFit-Soft-T\* (full features)    |               |                |     |        |        |
-| BoostedRules-Soft-T\* (full feat.)  |               |                |     |        |        |
-| RF-Direct (ceiling)                 |               |                |     |        |        |
+| Method                             | Attack Fidel. | Overall Fidel. | FPR | #Rules | #Conds |
+| ---------------------------------- | ------------- | -------------- | --- | ------ | ------ |
+| DT-Hard-Label (full features)      |               |                |     |        |        |
+| DT-Soft-T1 (full features)         |               |                |     |        |        |
+| DT-Soft-T\* (full features)        |               |                |     |        |        |
+| DT-Soft-T\* (SHAP-selected)        |               |                |     |        |        |
+| HSTree-Soft-T\* (full features)    |               |                |     |        |        |
+| FIGS-Soft-T\* (full features)      |               |                |     |        |        |
+| RuleFit-Soft-T\* (full features)   |               |                |     |        |        |
+| BoostedRules-Soft-T\* (full feat.) |               |                |     |        |        |
+| RF-Direct (ceiling)                |               |                |     |        |        |
 
 > Isolate 3 nguồn gain: Hard vs Soft-T1 → giá trị soft label. Soft-T1 vs Soft-T\* → giá trị temperature. Full vs SHAP-selected → giá trị feature selection (rule complexity có giảm không?)
 >

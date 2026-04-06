@@ -27,7 +27,12 @@ class TeacherLightningModule(L.LightningModule):
             # Soft labels: temperature-scaled categorical cross-entropy
             log_probs = F.log_softmax(logits / self.config.temperature, dim=-1)
             return -(y * log_probs).sum(dim=-1).mean()
-        return F.cross_entropy(logits, y.long())
+        weight = None
+        if self.config.class_weights is not None:
+            weight = torch.tensor(
+                self.config.class_weights, device=logits.device, dtype=logits.dtype
+            )
+        return F.cross_entropy(logits, y.long(), weight=weight)
 
     def _shared_step(self, batch: tuple):
         x, y = batch
@@ -71,7 +76,15 @@ class TeacherLightningModule(L.LightningModule):
             lr=self.config.lr,
             weight_decay=self.config.weight_decay,
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=(self.trainer.max_epochs or 1), eta_min=1e-6
+        max_epochs = self.trainer.max_epochs or 1
+        warmup = self.config.warmup_epochs
+        warmup_sched = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup
+        )
+        cosine_sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max(max_epochs - warmup, 1), eta_min=1e-6
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup_sched, cosine_sched], milestones=[warmup]
         )
         return {"optimizer": optimizer, "lr_scheduler": scheduler}

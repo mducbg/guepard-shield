@@ -23,22 +23,68 @@ class LiddsRecordingMeta(SequenceMeta):
 
 
 @lru_cache(maxsize=16)
-def read_sc_tokens(file_path_str: str) -> List[str]:
-    """Parse .sc exit events and return syscall name list.
+def read_sc_tokens_and_timestamps(
+    file_path_str: str,
+) -> tuple[List[str], List[float]]:
+    """Parse .sc exit events, return (tokens, timestamps_ns).
 
-    LRU-cached: sequence-level shuffle keeps all windows of a recording
-    consecutive, so only O(num_workers) files need to be hot at once.
-    maxsize=16 accommodates up to 16 parallel DataLoader workers.
+    LRU-cached with maxsize=16 to support up to 16 DataLoader workers.
+    Single parse pass shared by both token and timestamp consumers.
     """
     tokens: list[str] = []
+    timestamps: list[float] = []
     with open(file_path_str, "r", encoding="utf-8") as f:
         for line in f:
             parts = line.split()
             # Format: timestamp uid pid proc_name tid syscall_name direction [args...]
             # Keep only exit events (direction = "<")
             if len(parts) >= 7 and parts[6] == "<":
+                timestamps.append(float(parts[0]))
                 tokens.append(parts[5])
-    return tokens
+    return tokens, timestamps
+
+
+def read_sc_tokens(file_path_str: str) -> List[str]:
+    """Return syscall name list for .sc file. Backed by read_sc_tokens_and_timestamps cache."""
+    return read_sc_tokens_and_timestamps(file_path_str)[0]
+
+
+def exploit_window_label(
+    window_start: int,
+    window_end: int,
+    timestamps: List[float],
+    exploit_times_ns: List[float],
+) -> int:
+    """Return 1 if any event in [window_start, window_end) occurred after the exploit start.
+
+    Following LID-DS literature convention: a window is attack if it contains at
+    least one syscall with timestamp >= min(exploit_times_ns).  This labels all
+    post-exploit activity as attack, giving enough attack windows per recording
+    for the sampler to reliably include them.
+    """
+    if not exploit_times_ns:
+        return 0
+    window_ts = timestamps[window_start:window_end]
+    if not window_ts:
+        return 0
+    exploit_start = min(exploit_times_ns)
+    return 1 if any(ts >= exploit_start for ts in window_ts) else 0
+
+
+def lidds_label_fn(seq_meta, win_start: int, win_end: int) -> int:
+    """Window-level label for LID-DS: 1 if window overlaps post-exploit activity.
+
+    For normal recordings (no exploit_times_ns) returns seq_meta.label (= 0).
+    For attack recordings returns 1 for any window on or after the first exploit
+    event — post-exploit syscalls carry the attack context.
+    """
+    if (
+        not isinstance(seq_meta, LiddsRecordingMeta)
+        or not seq_meta.exploit_times_ns
+    ):
+        return seq_meta.label
+    _, timestamps = read_sc_tokens_and_timestamps(str(seq_meta.file_path))
+    return exploit_window_label(win_start, win_end, timestamps, seq_meta.exploit_times_ns)
 
 
 class LiddsCorpus:
@@ -177,8 +223,9 @@ class LiddsCorpus:
             with open(json_files[0]) as f:
                 meta = json.load(f)
             has_exploit = meta.get("exploit", False)
+            # JSON "absolute" is in Unix seconds; .sc timestamps are nanoseconds.
             exploit_times = [
-                e.get("absolute", 0)
+                e.get("absolute", 0) * 1e9
                 for e in meta.get("time", {}).get("exploit", [])
                 if isinstance(e, dict)
             ]

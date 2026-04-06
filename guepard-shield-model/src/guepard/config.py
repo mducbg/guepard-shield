@@ -28,6 +28,12 @@ class TeacherConfig:
     lr: float = 1e-4
     weight_decay: float = 1e-2
     temperature: float = 1.0
+    # Per-class loss weights [w_normal, w_attack]. None = uniform.
+    # Use sqrt(n_normal / n_attack) for attack weight to counter imbalance
+    # without over-penalising normal windows.
+    class_weights: list[float] | None = None
+    # Linear warmup epochs before cosine decay kicks in.
+    warmup_epochs: int = 5
 
 
 @dataclass

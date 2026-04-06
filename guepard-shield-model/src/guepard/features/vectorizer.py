@@ -1,5 +1,7 @@
+from pathlib import Path
 from typing import Iterator, List
 
+import joblib
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
 from tqdm import tqdm
@@ -52,3 +54,13 @@ class SyscallVectorizer:
 
     def get_feature_names(self):
         return self.vectorizer.get_feature_names_out()
+
+    def save(self, path: Path | str) -> None:
+        joblib.dump(self.vectorizer, path)
+
+    @classmethod
+    def load(cls, path: Path | str) -> "SyscallVectorizer":
+        obj = cls()
+        obj.vectorizer = joblib.load(path)
+        obj.is_fitted = True
+        return obj

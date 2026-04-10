@@ -1,0 +1,5 @@
+syscall,count
+pread,9920243
+<unknown>,1760722
+pwrite,1159958
+prlimit,472

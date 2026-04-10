@@ -391,16 +391,6 @@ Bổ sung (nếu relevant): weighted fidelity, class-conditional fidelity, eBPF 
 
 ### Target venues (rank B+)
 
-**Hướng A — Security venue (framing: syscall anomaly detection + rule enforcement):**
-
-- **RAID** (International Symposium on Research in Attacks, Intrusions and Defenses) — rank A, competitive nhưng phù hợp nhất
-- **ACSAC** (Annual Computer Security Applications Conference) — rank A, applied security focus
-- **DIMVA** (Detection of Intrusions and Malware & Vulnerability Assessment) — rank B, European, acceptance ~25-30%
-- **SecureComm** — rank B, practical security
-- **AsiaCCS workshop track** — dễ nhất, tốt cho first publication
-
-**Hướng B — Networking venue (framing: runtime enforcement for containerized network services):**
-
 - **IEEE Globecom** — rank B, IEEE ComSoc, có symposium "Communication & Information Systems Security"
 - **IEEE ICC** — rank B, tương đương Globecom, deadline thường tháng 1
 - Framing cần anchor vào: microservices, cloud-native network functions, container orchestration — không frame thuần syscall IDS

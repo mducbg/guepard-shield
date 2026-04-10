@@ -1,0 +1,16 @@
+scenario,n_recordings,median_threads,max_threads,gnn_feasible
+Bruteforce_CWE-307,907,6.0,9,yes
+CVE-2012-2122,882,21.0,1025,no
+CVE-2014-0160,878,6.0,9,yes
+CVE-2017-12635_6,872,25.0,39,yes
+CVE-2017-7529,848,1.0,1,yes
+CVE-2018-3760,859,13.0,13,yes
+CVE-2019-5418,880,11.0,12,yes
+CVE-2020-13942,874,328.0,358,no
+CVE-2020-23839,880,38.0,75,partial
+CVE-2020-9484,879,21.0,36,yes
+CWE-89-SQL-injection,880,63.0,74,partial
+EPS_CWE-434,880,309.5,532,no
+Juice-Shop,881,14.0,14,yes
+PHP_CWE-434,878,65.0,104,partial
+ZipSlip,878,339.5,1239,no

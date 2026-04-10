@@ -6,11 +6,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-guepard-shield-common = { path = "../guepard-shield-common", features = ["user"] }
+guepard-shield-common = { path = "../guepard-shield-common", features = [
+    "user",
+] }
 
 anyhow = { workspace = true, default-features = true }
 aya = { workspace = true }
 aya-log = { workspace = true }
+bytes = { workspace = true, features = ["std"] }
 env_logger = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }

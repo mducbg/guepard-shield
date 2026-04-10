@@ -1,10 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "guepard-shield",
-    "guepard-shield-common",
-    "guepard-shield-ebpf",
-]
+members = ["guepard-shield", "guepard-shield-common", "guepard-shield-ebpf"]
 default-members = ["guepard-shield", "guepard-shield-common"]
 
 [workspace.package]
@@ -19,6 +15,7 @@ aya-log = { git = "https://github.com/aya-rs/aya", default-features = false }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya", default-features = false }
 
 anyhow = { version = "1", default-features = false }
+bytes = { version = "1", default-features = false }
 cargo_metadata = { version = "0.23.0", default-features = false }
 # `std` feature is currently required to build `clap`.
 #

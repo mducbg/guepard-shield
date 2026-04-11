@@ -1,6 +1,0 @@
-metric,value
-Total Recordings,11368
-Normal (label=0),10206
-Attack (label=1),1162
-Class Ratio (attack/normal),0.114
-Empty Recordings,0

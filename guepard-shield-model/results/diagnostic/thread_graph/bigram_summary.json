@@ -1,7 +1,0 @@
-{
-  "normal_unique_edges": 6339,
-  "attack_unique_edges": 5909,
-  "shared_edges": 5487,
-  "attack_only_edges": 422,
-  "jaccard_similarity": 0.811566336340778
-}

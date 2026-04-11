@@ -1,7 +1,0 @@
-fdatasync
-fstatfs
-getgroups
-kill
-mremap
-rmdir
-sendmmsg

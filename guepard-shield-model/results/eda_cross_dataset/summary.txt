@@ -1,0 +1,32 @@
+=== Cross-Dataset Vocabulary Analysis ===
+Generated: 2026-04-13
+
+Vocab sizes (confirmed by full corpus scan):
+  LID-DS-2021 train: 99 real syscalls + 1 <unknown> artifact = 100 entries
+  LID-DS-2019 full:  100 syscalls
+  DongTing full:     330 syscalls
+
+--- LID-DS-2021 train vs LID-DS-2019 ---
+Intersection: 94
+Only in LID-DS-2021 (5): bind, epoll_pwait, fchown, tgkill, utimensat
+Only in LID-DS-2019 (6): fstatfs, getgroups, mremap, rmdir, rt_sigsuspend, sendmsg
+
+--- LID-DS-2021 train vs DongTing ---
+Intersection: 96
+Only in LID-DS-2021 (3): pread, pwrite, utime
+Only in DongTing (234): see vocab_overlap.csv
+
+--- LID-DS-2019 vs DongTing ---
+Intersection: 97
+Only in LID-DS-2019 (3): pread, pwrite, utime
+Only in DongTing (233): see vocab_overlap.csv
+
+--- All three ---
+Intersection: 91
+
+Key implications:
+- LID-DS-2019 generalization: 94/99 overlap (95%) — near-perfect, same workloads
+- DongTing generalization: 96/99 overlap (97%) — most server syscalls covered, but
+  234 OOV syscalls require <unk> token handling
+- Only 3 syscalls (pread, pwrite, utime) present in both LID-DS-2021 and LID-DS-2019
+  but missing from DongTing — minor POSIX compatibility aliases, not critical

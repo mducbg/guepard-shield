@@ -1,0 +1,7 @@
+split,label,count
+train,normal,5486
+train,abnormal,9356
+val,normal,685
+val,abnormal,1127
+test,normal,678
+test,abnormal,1633

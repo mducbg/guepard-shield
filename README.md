@@ -25,7 +25,7 @@ The `guepard-shield` build script (`build.rs`) calls `aya_build::build_ebpf` to 
 
 ## Python (ML / Data)
 
-Python workspace lives in `guepard-shield-model/`. Uses `uv` for package management. Python 3.13 required.
+Python workspace lives in `guepard-shield-model/`. Uses `uv` for package management. Python 3.14 required.
 
 ```bash
 # Install dependencies

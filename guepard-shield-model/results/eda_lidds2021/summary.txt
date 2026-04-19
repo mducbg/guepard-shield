@@ -1,0 +1,29 @@
+shape: (6, 3)
+┌───────┬─────────┬───────┐
+│ split ┆ kind    ┆ count │
+│ ---   ┆ ---     ┆ ---   │
+│ str   ┆ str     ┆ i64   │
+╞═══════╪═════════╪═══════╡
+│ train ┆ normal  ┆ 3149  │
+│ train ┆ exploit ┆ 0     │
+│ val   ┆ normal  ┆ 885   │
+│ val   ┆ exploit ┆ 0     │
+│ test  ┆ normal  ┆ 11341 │
+│ test  ┆ exploit ┆ 1815  │
+└───────┴─────────┴───────┘
+train: p50=95,429  p90=716,697  p99=935,972  max=1,104,985
+val  : p50=75,721  p90=706,368  p99=932,592  max=1,021,478
+test : p50=91,505  p90=745,804  p99=997,338  max=6,216,251
+Vocab size per split:
+  train: 100
+  val: 100
+  test: 114
+
+OOV syscalls (test \ train): 14
+  ['chown', 'faccessat', 'fadvise64', 'getgroups', 'getpgrp', 'getpriority', 'mremap', 'prlimit', 'pselect6', 'sendmsg', 'setpgid', 'setpriority', 'setsid', 'vfork']
+train: median threads = 1.0, max = 4, min = 0
+val  : median threads = 1.0, max = 3, min = 1
+test : median threads = 1.0, max = 4, min = 1
+Exploit recordings (test): 2173
+  offset  — median=11.1s  p90=17.2s  max=53.4s
+  fraction — median=0.48  p90=0.71  max=186.96

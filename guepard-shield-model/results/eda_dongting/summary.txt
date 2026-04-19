@@ -1,0 +1,66 @@
+shape: (6, 3)
+┌───────┬──────────┬───────┐
+│ split ┆ label    ┆ count │
+│ ---   ┆ ---      ┆ ---   │
+│ str   ┆ str      ┆ i64   │
+╞═══════╪══════════╪═══════╡
+│ train ┆ normal   ┆ 5486  │
+│ train ┆ abnormal ┆ 9356  │
+│ val   ┆ normal   ┆ 685   │
+│ val   ┆ abnormal ┆ 1127  │
+│ test  ┆ normal   ┆ 678   │
+│ test  ┆ abnormal ┆ 1633  │
+└───────┴──────────┴───────┘
+train/normal  : p50=61  p90=330  p99=245,235  max=4,645,272
+train/abnormal: p50=85  p90=1,083,313  p99=20,884,597  max=59,268,103
+val  /normal  : p50=61  p90=220  p99=77,656  max=3,421,266
+val  /abnormal: p50=36  p90=2,077,562  p99=36,852,890  max=100,000,000
+test /normal  : p50=61  p90=196  p99=504,068  max=14,397,021
+test /abnormal: p50=33  p90=12,657  p99=8,368,234  max=51,265,024
+Vocab size per split:
+  train: 326
+  val: 244
+  test: 246
+
+OOV syscalls (test \ train): 3
+  ['set_mempolicy', 'time', 'utimes']
+
+Abnormal recordings per kernel version:
+shape: (26, 2)
+┌────────────────┬───────┐
+│ kernel_version ┆ count │
+│ ---            ┆ ---   │
+│ str            ┆ i64   │
+╞════════════════╪═══════╡
+│ 4.13           ┆ 387   │
+│ 4.14           ┆ 184   │
+│ 4.15           ┆ 1540  │
+│ 4.16           ┆ 727   │
+│ 4.17           ┆ 403   │
+│ …              ┆ …     │
+│ 5.5            ┆ 806   │
+│ 5.6            ┆ 530   │
+│ 5.7            ┆ 394   │
+│ 5.8            ┆ 313   │
+│ 5.9            ┆ 493   │
+└────────────────┴───────┘
+
+Recordings per source category:
+shape: (30, 2)
+┌───────────────────┬───────┐
+│ source            ┆ count │
+│ ---               ┆ ---   │
+│ str               ┆ i64   │
+╞═══════════════════╪═══════╡
+│ glibc 2884        ┆ 2884  │
+│ ltp 2561          ┆ 2561  │
+│ kernel_v4150-1540 ┆ 1540  │
+│ posixtest 1235    ┆ 1234  │
+│ kernel_v530-907   ┆ 907   │
+│ …                 ┆ …     │
+│ kernel_v5130-177  ┆ 177   │
+│ kselftest 170     ┆ 170   │
+│ kernel_v5160-107  ┆ 107   │
+│ kernel_v5150-90   ┆ 90    │
+│ kernel_v5170-4    ┆ 4     │
+└───────────────────┴───────┘

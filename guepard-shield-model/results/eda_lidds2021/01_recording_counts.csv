@@ -1,7 +1,0 @@
-split,kind,count
-train,normal,3149
-train,exploit,0
-val,normal,885
-val,exploit,0
-test,normal,11341
-test,exploit,1815

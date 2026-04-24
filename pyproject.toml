@@ -1,0 +1,35 @@
+[project]
+name = "guepard-shield"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "imodels>=2.0.4",
+  "ipykernel>=7.1.0",
+  "ipywidgets>=8.1.8",
+  "lightning>=2.6.1",
+  "llvmlite>=0.46.0",
+  "matplotlib>=3.10.8",
+  "numpy>=2.4.1",
+  "polars>=1.27.1",
+  "rich>=14.0.0",
+  "scikit-learn>=1.6.0",
+  "seaborn>=0.13.2",
+  "shap>=0.49.1",
+  "torch>=2.11.0",
+  "tqdm>=4.66.0"
+]
+
+[dependency-groups]
+dev = [
+  "jupytext>=1.19.1",
+  "ruff>=0.15.7",
+  "ty>=0.0.12",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "guepard-shield-model"
+module-name = "gp"

@@ -1,3 +1,0 @@
-set_mempolicy
-time
-utimes

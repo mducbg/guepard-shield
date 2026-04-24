@@ -52,8 +52,10 @@ This document tracks the actual implementation progress of the RuleDistill proje
         - **Positive (Attack):** recording score >= 0.74 (~94% recall, ~2% FPR)
         - **Negative (Normal):** recording score <= 0.30
         - **Gray zone (0.30-0.74):** Discard or use as unlabeled
-    4. Distill rules from positive/negative recordings using decision tree or rule list learner.
-    5. Evaluate rule fidelity vs. Teacher (>95% target) and rule FPR (<1% target).
+    4. Extract eBPF-friendly features (syscall histogram + discriminative n-grams) from windows.
+    5. Distill rules from positive/negative recordings using Greedy Decision Set.
+    6. Evaluate rule fidelity vs. Teacher (>95% target) and rule FPR (<1% target).
+    7. Export rules to JSON config for Rust/Aya ingestion (existing `guepard-shield-ebpf` crate).
 
 ---
 
@@ -67,9 +69,19 @@ This document tracks the actual implementation progress of the RuleDistill proje
 - **Train:** `uv run python notebooks/p2/train_transformer.py`
 - **Evaluate:** `uv run python notebooks/p2/evaluate_transformer.py`
 
-### 3. Key Paths
+### 3. Rule Extraction (P3)
+- **Generate Pseudo-Labels:** `uv run python notebooks/p3/01_generate_pseudo_labels.py`
+- **Extract Features:** `uv run python notebooks/p3/02_extract_features.py`
+- **Learn Rules:** `uv run python notebooks/p3/03_learn_rules.py`
+- **Evaluate Rules:** `uv run python notebooks/p3/04_evaluate_rules.py`
+- **Export Rust Config:** `uv run python notebooks/p3/05_export_rust_config.py`
+- **Map MITRE:** `uv run python notebooks/p3/06_map_mitre.py`
+
+### 4. Key Paths
 - **Checkpoints:** `results/checkpoints/transformer/`
 - **Processed Data:** `data/processed/lidds2021/`
+- **P3 Rules:** `results/p3_rule_extraction/rules/`
+- **P3 Rust Config:** `results/p3_rule_extraction/rust/rule_config.json`
 - **Source Code:** `guepard-shield-model/gp/`
 - **Global Config:** Hyperparameters are managed in `gp.config` as global variables.
 

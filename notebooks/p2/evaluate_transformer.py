@@ -8,7 +8,6 @@
 
 # %%
 from typing import Optional, Dict, List
-import os
 import torch
 import numpy as np
 from pathlib import Path
@@ -26,14 +25,13 @@ from gp.model.transformer import SyscallTransformer
 # ## 1. Load Model
 
 # %%
-# Find the best model checkpoint
-ckpt_dir = Path(ckpt_path)
-checkpoints = list(ckpt_dir.glob("*.ckpt"))
-if not checkpoints:
-    raise FileNotFoundError(f"No checkpoints found in {ckpt_dir}")
-
-best_ckpt = max(checkpoints, key=os.path.getctime)
-print(f"Loading best model from: {best_ckpt}")
+# Teacher checkpoint — explicitly pinned, do not change.
+# This is the subsampled model (val_loss=0.3455) selected as Teacher in P2.
+# See docs/WALKTHROUGH.md for the model comparison rationale.
+best_ckpt = Path("results/checkpoints/transformer/best/best-transformer-epoch=29-val_loss=0.3455.ckpt")
+if not best_ckpt.exists():
+    raise FileNotFoundError(f"Teacher checkpoint not found: {best_ckpt}")
+print(f"Loading Teacher checkpoint: {best_ckpt.name}")
 
 model = SyscallTransformer.load_from_checkpoint(str(best_ckpt))
 model.eval()
@@ -135,8 +133,9 @@ def evaluate_test_set(
             rec_score = window_scores.max()
 
             recording_results.append({
+                "filename": f_win.name,
                 "score": rec_score,
-                "label": is_exploit_rec
+                "label": is_exploit_rec,
             })
 
     return np.array(all_window_scores), np.array(all_window_labels), recording_results
@@ -146,10 +145,7 @@ def evaluate_test_set(
 # Run Evaluation
 if __name__ == "__main__":
     # ---- CONFIGURATION ----
-    # NOTE: "mean" is the only viable aggregation for this dataset.
-    # "max" and "p95" fail because normal windows contain legitimate rare syscalls
-    # with higher max-NLL than many attack windows.
-    AGGREGATION = "mean"         # "mean" | "max" | "p95"
+    AGGREGATION = "mean"  # "mean" is the only viable aggregation — see WALKTHROUGH.md
     MAX_NORMAL_RECORDINGS = 1000  # None = all
     MINI_BATCH_SIZE = 32
     FPR_TARGETS = [0.01, 0.05, 0.10]

@@ -27,8 +27,8 @@ P3_OUTPUT_DIR = "results/p3_rule_extraction"
 TEACHER_RECORDING_CSV = "results/evaluation/transformer/recording_predictions.csv"
 
 # Thresholds for pseudo-label generation
-POS_THRESHOLD = 0.74   # recording score >= this → Attack
-NEG_THRESHOLD = 0.30   # recording score <= this → Normal
+POS_THRESHOLD = 0.74   # recording score >= this → Attack  (1% normal contamination, 93.9% attack coverage)
+NEG_THRESHOLD = 0.50   # recording score <= this → Normal  (2% attack contamination, 81% normal coverage)
 
 # Feature engineering
 WINDOW_SIZE = 1000

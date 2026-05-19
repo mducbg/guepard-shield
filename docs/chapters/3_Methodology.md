@@ -87,9 +87,9 @@ Sự tương tác giữa hai sub-agents vận hành:
 ### 3.2.1 Tokenization
 
 Mỗi sự kiện syscall được ánh xạ tới tên syscall của nó, sau đó được tra cứu trong một bộ từ vựng (vocabulary) cố định:
-
-$$\text{token\_id} = \text{vocab}[\text{Syscall\_Name}]$$
-
+```math
+\text{token\_id} = \text{vocab}[\text{Syscall\_Name}]
+```
 Bộ từ vựng được xây dựng từ dữ liệu huấn luyện với một ngưỡng tần suất tối thiểu. Các tên syscall không xác định tại thời điểm inference được ánh xạ tới `<UNK>`. Kích thước bộ từ vựng hiện tại |Σ| ≈ 102.
 
 **Lý do:** Tên syscall tạo thành một bảng chữ cái hữu hạn và ổn định. Bộ từ vựng bao quát hầu hết các syscall quan sát được trong các khối lượng công việc server bình thường, thỏa mãn yêu cầu của DFA về một bảng chữ cái đầu vào hữu hạn mà không cần kỹ thuật phức tạp hơn.

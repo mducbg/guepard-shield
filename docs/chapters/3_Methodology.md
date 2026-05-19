@@ -63,9 +63,9 @@ Sự tương tác giữa hai sub-agents vận hành:
 │              Transformer Sub-Agent  (Phân tích ngoại tuyến)            │
 │                                                                        │
 │   ┌─────────────────────┐                                              │
-│   │  Tính điểm NLL      │──── True Positive ──▶  ALERT / LOG           │
+│   │  Tính điểm NLL      │──── True Positive ──▶  ALERT / LOG          │
 │   │  trên suspect window│                                              │
-│   └─────────────────────┘──── False Positive ──▶ ┌──────────────────┐  │
+│   └─────────────────────┘──── False Positive ──▶┌──────────────────┐  │
 │                                (hành vi mới      │  Trích xuất lại  │  │
 │                                 hợp lệ)          │  DFA & thêm bước │  │
 │                                                  └────────┬─────────┘  │

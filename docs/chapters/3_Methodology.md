@@ -1,45 +1,45 @@
-# Chapter 3 — Methodology
+# Chương 3 — Phương pháp nghiên cứu
 
-This chapter describes the **proposed methodology** for the next iteration of the project. In the current repository state, only Phase 1 EDA and preprocessing are implemented; the later Phase 2 / Phase 3 / Phase 4 sections below are design targets, not completed code paths.
+Giai đoạn 1 và 2 đã được triển khai. Thiết kế của Giai đoạn 3 đã được hoàn thiện nhưng chưa được lập trình. Giai đoạn 4 hiện đang ở dạng khung (scaffold).
 
-## 3.1 Overview
+## 3.1 Tổng quan
 
-Guepard Shield is a four-phase pipeline that converts raw syscall recordings into a kernel-enforced DFA:
+Guepard Shield là một pipeline gồm bốn giai đoạn, chuyển đổi các bản ghi syscall thô thành một DFA được thực thi trong kernel:
 
 ```
-[Phase 1] EDA + Data Preprocessing
-          - Thread separation, composite tokenization, window labeling
+[Phase 1] EDA + Tiền xử lý dữ liệu
+          - Tokenization tên syscall, gán nhãn window
           ↓
 [Phase 2] Teacher: Decoder-only Transformer
-          - Next-Token Prediction on normal syscall sequences
-          - Evaluate: window-level NLL scores → AUROC / F1
+          - Next-Token Prediction trên các chuỗi syscall bình thường
+          - Đánh giá: điểm NLL cấp độ window → AUROC / F1
           ↓
-[Phase 3] Student: DFA Extraction
-          - Collect final-layer hidden states h_t
-          - K-Means clustering → K discrete states
-          - Build transition table δ(q, token) → q'
-          - Resolve non-determinism (strategies S1–S4)
-          - Export dfa_config.json
+[Phase 3] Student: Trích xuất DFA
+          - Thu thập các trạng thái ẩn lớp cuối h_t
+          - Gom cụm K-Means → K trạng thái rời rạc
+          - Xây dựng bảng chuyển đổi δ(q, token) → q'
+          - Giải quyết tính không xác định (chiến lược S1–S4)
+          - Xuất tệp dfa_config.json
           ↓
-[Phase 4] Runtime Enforcement (eBPF)
-          - Per-thread DFA traversal via BPF map lookup
-          - Three-tier response: Normal / Edge / Rejecting
-          - Suspect window feedback loop to offline Transformer
+[Phase 4] Thực thi tại Runtime (eBPF)
+          - Duyệt DFA theo từng thread thông qua tra cứu BPF map
+          - Phản hồi ba cấp độ: Normal / Edge / Rejecting
+          - Vòng lặp phản hồi suspect window tới Transformer ngoại tuyến
 ```
 
-At runtime, there is no concept of "recording." The system processes a continuous per-thread syscall stream. Only sliding windows of size `W` exist.
+Tại thời điểm thực thi (runtime), không có khái niệm "ghi lại" (recording). Hệ thống xử lý một luồng syscall liên tục theo từng thread. Chỉ tồn tại các sliding windows có kích thước `W`.
 
-The two operational sub-agents and their interaction:
+Sự tương tác giữa hai sub-agents vận hành:
 
 ```
-                 CONTINUOUS SYSCALL STREAM (per thread)
+                 LUỒNG SYSCALL LIÊN TỤC (theo từng thread)
                                   │
 ┌─────────────────────────────────▼──────────────────────────────────────┐
 │                    eBPF SUB-AGENT  (Kernel Space)                      │
 │                                                                        │
 │  ┌──────────────────────────────────────┐                              │
-│  │  Composite Tokenizer                 │                              │
-│  │  (Syscall_ID, RetCode_Bucket) → token│                              │
+│  │  Syscall Name Tokenizer              │                              │
+│  │  Syscall_Name → token_id             │                              │
 │  └─────────────────┬────────────────────┘                              │
 │                    │                                                   │
 │  ┌─────────────────▼────────────────────┐                              │
@@ -49,148 +49,146 @@ The two operational sub-agents and their interaction:
 │  └──────────┬──────────────┬────────────┘                              │
 │             │              │              │                            │
 │          NORMAL           EDGE         REJECT                          │
-│          continue    capture window   BLOCK / KILL / ALERT             │
+│          tiếp tục    thu thập window   BLOCK / KILL / ALERT            │
 │                            │                                           │
 └────────────────────────────│───────────────────────────────────────────┘
                              │  perf_event ring buffer
                              │  (suspect window + TID + state trace)
 ┌────────────────────────────▼───────────────────────────────────────────┐
 │                    Rust Agent  (User Space)                            │
-│            receive window → forward to Transformer                     │
+│            nhận window → chuyển tiếp tới Transformer                   │
 └────────────────────────────┬───────────────────────────────────────────┘
                              │
 ┌────────────────────────────▼───────────────────────────────────────────┐
-│              Transformer Sub-Agent  (Offline Analyzer)                 │
+│              Transformer Sub-Agent  (Phân tích ngoại tuyến)            │
 │                                                                        │
 │   ┌─────────────────────┐                                              │
-│   │  NLL scoring        │──── True Positive ──▶  ALERT / LOG           │
-│   │  on suspect window  │                                              │
+│   │  Tính điểm NLL      │──── True Positive ──▶  ALERT / LOG           │
+│   │  trên suspect window│                                              │
 │   └─────────────────────┘──── False Positive ──▶ ┌──────────────────┐  │
-│                                (legit new        │  Re-extract DFA  │  │
-│                                 behavior)        │  add transitions │  │
+│                                (hành vi mới      │  Trích xuất lại  │  │
+│                                 hợp lệ)          │  DFA & thêm bước │  │
 │                                                  └────────┬─────────┘  │
 └───────────────────────────────────────────────────────────│────────────┘
                                                             │
-                                                   atomic BPF map update
+                                                   cập nhật map BPF nguyên tử
                                                             │
                                                             ▼
                                                  ┌────────────────────────┐
-                                                 │  DFA updated in-place  │
-                                                 │  (no kernel reload)    │
+                                                 │  DFA cập nhật tại chỗ  │
+                                                 │  (không nạp lại kernel)│
                                                  └────────────────────────┘
 ```
 
 ---
 
-## 3.2 Phase 1 — Data Preprocessing
+## 3.2 Giai đoạn 1 — Tiền xử lý dữ liệu
 
-### 3.2.1 Composite Tokenization
+### 3.2.1 Tokenization
 
-Each syscall event is mapped to a composite token:
+Mỗi sự kiện syscall được ánh xạ tới tên syscall của nó, sau đó được tra cứu trong một bộ từ vựng (vocabulary) cố định:
 
-$$\text{token} = (\text{Syscall\_ID},\ \text{ReturnCode\_Bucket})$$
+$$\text{token\_id} = \text{vocab}[\text{Syscall\_Name}]$$
 
-Return codes are bucketed (e.g., success=0, EPERM, EAGAIN, other-error) to keep the alphabet size |Σ| finite and tractable. |Σ| is a hyperparameter.
+Bộ từ vựng được xây dựng từ dữ liệu huấn luyện với một ngưỡng tần suất tối thiểu. Các tên syscall không xác định tại thời điểm inference được ánh xạ tới `<UNK>`. Kích thước bộ từ vựng hiện tại |Σ| ≈ 102.
 
-**Rationale:** Raw syscall IDs alone discard argument context. Composite tokens enrich the alphabet without unbounded growth, satisfying the DFA requirement of a finite input alphabet.
+**Lý do:** Tên syscall tạo thành một bảng chữ cái hữu hạn và ổn định. Bộ từ vựng bao quát hầu hết các syscall quan sát được trong các khối lượng công việc server bình thường, thỏa mãn yêu cầu của DFA về một bảng chữ cái đầu vào hữu hạn mà không cần kỹ thuật phức tạp hơn.
 
-### 3.2.2 Thread-level Separation
+**Hướng phát triển — composite tokenization:** Một phần mở rộng dự kiến sẽ ánh xạ mỗi syscall tới một token hỗn hợp `(Syscall_Name, ReturnCode_Bucket, Syscall_Params)`, trong đó các mã trả về được phân nhóm (ví dụ: thành công, EPERM, EAGAIN, lỗi-khác). Điều này sẽ tăng tính phong phú của bảng chữ cái — phân biệt một lệnh `open` thành công với một lệnh thất bại — với chi phí là bộ từ vựng và BPF map lớn hơn. Việc này được tạm hoãn cho đến khi baseline của Giai đoạn 2 triển khai thành công.
 
-Syscall streams are partitioned by Thread ID (TID) before any windowing. Each TID produces an independent sequence.
+### 3.2.2 Sliding Windows và Gán nhãn
 
-**Rationale:** Interleaving syscalls from concurrent threads destroys causality. `h_t` for a token from thread A would encode context from thread B, producing meaningless hidden states and invalid DFA transitions.
+Chuỗi syscall của 1 chương trình được phân đoạn thành các sliding windows gối đầu lên nhau có kích thước `W`. `W` là một siêu tham số (hyperparameter) (phạm vi ứng viên: 64–128).
 
-### 3.2.3 Sliding Windows and Labeling
+Các window được gán nhãn bằng cách sử dụng dấu thời gian khai thác (exploit timestamps) từ metadata của bộ dữ liệu (tệp JSON của LID-DS): một window là **attack** nếu nó trùng lặp với khoảng thời gian khai thác, ngược lại là **normal**. Nhãn này chỉ được sử dụng cho đánh giá ngoại tuyến — không dùng để huấn luyện.
 
-Each per-thread stream is segmented into overlapping sliding windows of `W` tokens. `W` is a hyperparameter (candidate range: 64–128).
+**Lý do chọn W nhỏ:**
 
-Windows are labeled using exploit timestamps from dataset metadata (LID-DS JSON files): a window is **attack** if it overlaps the exploit interval, **normal** otherwise. This label is used only for offline evaluation — not for training.
-
-**Rationale for small W:**
-
-- Attack behavior (the exploit point) has high temporal locality — typically completes within tens of syscalls.
-- Smaller W forces the Transformer to generalize, producing hidden states that cluster more cleanly.
-- Smaller W → fewer DFA states → smaller eBPF map → lower kernel memory footprint.
+- Hành vi tấn công (điểm khai thác) có tính cục bộ tạm thời (temporal locality) cao — thường hoàn thành trong vòng vài chục syscall.
+- W nhỏ hơn buộc Transformer phải tổng quát hóa, tạo ra các trạng thái ẩn gom cụm sạch hơn.
+- W nhỏ hơn → ít trạng thái DFA hơn → eBPF map nhỏ hơn → chiếm ít bộ nhớ kernel hơn.
 
 ---
 
-## 3.3 Phase 2 — Teacher: Transformer Training
+## 3.3 Giai đoạn 2 — Teacher: Huấn luyện Transformer
 
-### 3.3.1 Architecture
+### 3.3.1 Kiến trúc
 
-Decoder-only Transformer with causal (lower-triangular) self-attention mask. Input: sequence of composite token IDs. Output: next-token probability distribution over Σ.
+Decoder-only Transformer với causal (lower-triangular) self-attention mask. Đầu vào: chuỗi các syscall-name token ID. Đầu ra: phân phối xác suất token tiếp theo trên Σ.
 
-The causal mask ensures $h_t$ is computed using only $(s_1, \ldots, s_{t-1})$, matching the one-directional, real-time nature of the DFA at runtime.
+Causal mask đảm bảo $h_t$ được tính toán chỉ bằng $(s_1, \ldots, s_{t-1})$, khớp với tính chất một chiều, thời gian thực của DFA khi vận hành.
 
-### 3.3.2 Training Objective
+### 3.3.2 Mục tiêu huấn luyện
 
-Next-Token Prediction with Cross-Entropy Loss:
+Next-Token Prediction với Cross-Entropy Loss:
 
 $$\mathcal{L} = -\frac{1}{N} \sum_{t=1}^{N} \log P_\theta(s_{t+1} \mid s_1, \ldots, s_t)$$
 
-Trained on **normal sequences only** (unsupervised anomaly detection). The model learns $P(\text{normal behavior})$; anomalies manifest as low probability (high NLL) windows.
+Được huấn luyện **chỉ trên các chuỗi bình thường** (phát hiện bất thường không giám sát). Mô hình học $P(\text{hành vi bình thường})$; các bất thường biểu hiện dưới dạng các window có xác suất thấp (NLL cao).
 
-Teacher Forcing enables full-sequence parallel training on GPU.
+Kỹ thuật Teacher Forcing cho phép huấn luyện song song toàn bộ chuỗi trên GPU.
 
-### 3.3.3 Anomaly Score
+### 3.3.3 Điểm bất thường (Anomaly Score)
 
-For a window $[s_1, \ldots, s_W]$, the anomaly score is the mean per-token NLL:
+Đối với một window $[s_1, \ldots, s_W]$, điểm bất thường là **NLL của token cuối cùng**:
 
-$$\text{score}(w) = -\frac{1}{W} \sum_{t=1}^{W} \log P_\theta(s_{t+1} \mid s_1, \ldots, s_t)$$
+$$\text{score}(w) = -\log P_\theta(s_W \mid s_1, \ldots, s_{W-1})$$
 
-Evaluation: window-level AUROC and F1 against exploit-timestamp labels. No recording-level aggregation.
+Chỉ token cuối cùng được tính điểm. $W-1$ token đứng trước đóng vai trò làm ngữ cảnh. Điều này phản chiếu quy tắc gán nhãn window: một window được dán nhãn attack nếu dấu thời gian syscall cuối cùng của nó nằm trong khoảng thời gian khai thác, vì vậy điểm bất thường nhắm vào cùng một vị trí.
+
+Đánh giá chính: AUROC và F1 cấp độ window so với nhãn exploit-timestamp. AUROC và F1 cấp độ bản ghi (recording-level) (gom nhóm điểm số tối đa cho mỗi bản ghi) được báo cáo như một chẩn đoán bổ sung để phù hợp với giao thức đánh giá LID-DS tiêu chuẩn.
 
 ---
 
-## 3.4 Phase 3 — Student: DFA Extraction
+## 3.4 Giai đoạn 3 — Student: Trích xuất DFA
 
-### 3.4.1 Hidden State Definition
+### 3.4.1 Định nghĩa Trạng thái ẩn (Hidden State)
 
-The **hidden state** is the final-layer output embedding of the **last token** in each forward pass:
+**Trạng thái ẩn** là vector nhúng đầu ra (output embedding) lớp cuối cùng của **token cuối cùng** trong mỗi lượt forward pass:
 
-$$h_t = \text{TransformerFinalLayer}(s_1, \ldots, s_t)[\text{position } t] \in \mathbb{R}^d$$
+$$h_t = \text{TransformerFinalLayer}(s_1, \ldots, s_t)[\text{vị trí } t] \in \mathbb{R}^d$$
 
-Due to causal self-attention, $h_t$ encodes the full causal context $(s_1, \ldots, s_{t-1})$. It is the closest analogue to an RNN hidden state and the most natural candidate for DFA state representation.
+Nhờ cơ chế causal self-attention, $h_t$ mã hóa toàn bộ ngữ cảnh nhân quả $(s_1, \ldots, s_{t-1})$. Đây là thành phần tương đương nhất với trạng thái ẩn của RNN và là ứng viên tự nhiên nhất để biểu diễn trạng thái DFA.
 
-### 3.4.2 State Discretization via K-Means
+### 3.4.2 Rời rạc hóa trạng thái qua K-Means
 
-Run the trained Transformer over all normal training windows. Collect all $h_t$ vectors — one per token per window. Apply K-Means clustering with $K$ clusters.
+Chạy Transformer đã huấn luyện trên tất cả các window huấn luyện bình thường. Thu thập tất cả các vector $h_t$ — mỗi token một vector cho mỗi window. Áp dụng gom cụm K-Means với $K$ cụm.
 
-Each cluster centroid $c_k$ defines one DFA state $q_k \in Q$. A hidden state $h$ maps to state $q_k$ where $k = \arg\min_j \|h - c_j\|_2$.
+Mỗi centroid của cụm $c_k$ định nghĩa một trạng thái DFA $q_k \in Q$. Một trạng thái ẩn $h$ được ánh xạ tới trạng thái $q_k$ trong đó $k = \arg\min_j \|h - c_j\|_2$.
 
-$K$ is a hyperparameter governing the **fidelity–compactness trade-off**:
+$K$ là một siêu tham số chi phối sự **đánh đổi giữa độ chính xác (fidelity) và tính gọn nhẹ (compactness)**:
 
-- Low K → coarse DFA, small eBPF map, higher non-determinism conflict rate, potential false positives.
-- High K → fine DFA, larger map, lower conflict rate, risk of overfitting to training sequences.
+- K thấp → DFA thô, eBPF map nhỏ, tỷ lệ xung đột không xác định cao hơn, khả năng xảy ra false positives.
+- K cao → DFA tinh, map lớn hơn, tỷ lệ xung đột thấp hơn, rủi ro overfitting vào các chuỗi huấn luyện.
 
-### 3.4.3 Transition Construction
+### 3.4.3 Xây dựng bước chuyển (Transition)
 
-For each consecutive token pair $(s_t, s_{t+1})$ in training data:
+Đối với mỗi cặp token liên tiếp $(s_t, s_{t+1})$ trong dữ liệu huấn luyện:
 
-1. Compute $h_t$ and $h_{t+1}$ via forward pass.
-2. Map to states: $A = \text{cluster}(h_t)$, $B = \text{cluster}(h_{t+1})$.
-3. Record candidate transition: $\delta(A,\ s_{t+1}) \to B$.
+1. Tính $h_t$ và $h_{t+1}$ qua forward pass.
+2. Ánh xạ tới các trạng thái: $A = \text{cluster}(h_t)$, $B = \text{cluster}(h_{t+1})$.
+3. Ghi lại bước chuyển ứng viên: $\delta(A,\ s_{t+1}) \to B$.
 
-The raw result is a transition **relation** (NFA), not a function, because the same $(A, s)$ pair may map to different target states across different sequences.
+Kết quả thô là một **quan hệ** chuyển đổi (NFA), không phải là một hàm, vì cùng một cặp $(A, s)$ có thể ánh xạ tới các trạng thái đích khác nhau trên các chuỗi khác nhau.
 
-### 3.4.4 Non-determinism Resolution
+### 3.4.4 Giải quyết tính không xác định (Non-determinism Resolution)
 
-Non-determinism arises when the K-Means projection loses information: two sequences with different histories may land in the same cluster A, then diverge on input $s$. Four resolution strategies are evaluated experimentally:
+Tính không xác định phát sinh khi phép chiếu K-Means làm mất thông tin: hai chuỗi có lịch sử khác nhau có thể rơi vào cùng một cụm A, sau đó phân tách tại đầu vào $s$. Bốn chiến lược giải quyết được đánh giá bằng thực nghiệm:
 
-| ID     | Strategy                | Mechanism                                                                                             | Trade-off                                                                            |
-| ------ | ----------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **S1** | NFA→DFA Determinization | Subset construction: DFA states are _sets_ of NFA states.                                             | Exact; may cause state explosion.                                                    |
-| **S2** | Increase K              | Finer clustering reduces information loss at projection.                                              | Larger BPF map; K calibration needed.                                                |
-| **S3** | Majority Voting         | For each $(A, s)$, keep the most frequent target state.                                               | Simple; minority branches silently dropped.                                          |
-| **S4** | Statistical Pruning (θ) | Count branch frequencies. Keep only branches with frequency $\ge \theta$ (e.g., 99%). Prune the rest. | Compact graph; exploits strong skew of syscall distributions. **Primary candidate.** |
+| ID     | Chiến lược              | Cơ chế                                                                                                     | Sự đánh đổi                                                                            |
+| ------ | ----------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **S1** | NFA→DFA Determinization | Xây dựng tập hợp con (Subset construction): các trạng thái DFA là các _tập hợp_ trạng thái NFA.            | Chính xác; có thể gây bùng nổ trạng thái (state explosion).                            |
+| **S2** | Tăng K                  | Gom cụm tinh hơn làm giảm mất mát thông tin khi chiếu.                                                     | BPF map lớn hơn; cần hiệu chuẩn K.                                                     |
+| **S3** | Majority Voting         | Với mỗi $(A, s)$, giữ lại trạng thái đích thường xuyên nhất.                                               | Đơn giản; các nhánh thiểu số bị loại bỏ âm thầm.                                       |
+| **S4** | Statistical Pruning (θ) | Đếm tần suất các nhánh. Chỉ giữ lại các nhánh có tần suất $\ge \theta$ (ví dụ: 99%). Loại bỏ phần còn lại. | Đồ thị gọn nhẹ; khai thác sự phân bố syscall cực kỳ lệch (skewed). **Ứng viên chính.** |
 
-**Rationale for S4 as primary candidate:** Normal server workloads are highly repetitive. The distribution of transitions is strongly skewed: one branch dominates (happy path), while minority branches ($< \theta$) are K-Means quantization artifacts rather than genuine behavioral variation.
+**Lý do chọn S4 làm ứng viên chính:** Các khối lượng công việc server bình thường có tính lặp lại cao. Sự phân bố các bước chuyển bị lệch mạnh: một nhánh chiếm ưu thế (happy path), trong khi các nhánh thiểu số ($< \theta$) là các tạo vật của quá trình lượng tử hóa K-Means hơn là sự biến đổi hành vi thực sự.
 
-### 3.4.5 DFA Export
+### 3.4.5 Xuất DFA
 
-The finalized DFA is exported to `dfa_config.json` and loaded into eBPF maps:
+DFA hoàn thiện được xuất ra `dfa_config.json` và được nạp vào các eBPF maps:
 
-| BPF Map            | Key                    | Value                    |
+| BPF Map            | Key (Khóa)             | Value (Giá trị)          |
 | ------------------ | ---------------------- | ------------------------ |
 | `transition_table` | `(state_id, token_id)` | `next_state_id`          |
 | `state_tier`       | `state_id`             | `{NORMAL, EDGE, REJECT}` |
@@ -198,41 +196,41 @@ The finalized DFA is exported to `dfa_config.json` and loaded into eBPF maps:
 
 ---
 
-## 3.5 Phase 4 — Runtime Enforcement (eBPF)
+## 3.5 Giai đoạn 4 — Thực thi tại Runtime (eBPF)
 
-### 3.5.1 Per-syscall DFA Step
+### 3.5.1 Bước DFA trên mỗi syscall
 
-On every syscall event, the eBPF program:
+Trên mỗi sự kiện syscall, chương trình eBPF:
 
-1. Reads `current_state` from `thread_state[TID]`.
-2. Computes composite token `(Syscall_ID, ReturnCode_Bucket)`.
-3. Looks up `next_state = transition_table[(current_state, token)]`.
-4. If no entry exists → **Rejecting State** (unknown transition).
-5. Writes `next_state` to `thread_state[TID]`.
-6. Reads `state_tier[next_state]` and acts accordingly.
+1. Đọc `current_state` từ `thread_state[TID]`.
+2. Tra cứu `token_id = vocab[Syscall_Name]`.
+3. Tra cứu `next_state = transition_table[(current_state, token)]`.
+4. Nếu không tồn tại mục nhập → **Trạng thái từ chối (Rejecting State)** (bước chuyển không xác định).
+5. Ghi `next_state` vào `thread_state[TID]`.
+6. Đọc `state_tier[next_state]` và hành động tương ứng.
 
-Cost: two O(1) BPF map lookups per syscall. No context switch to userspace for normal transitions.
+Chi phí: hai lần tra cứu BPF map O(1) trên mỗi syscall. Không có context switch sang userspace cho các bước chuyển bình thường.
 
-### 3.5.2 Tiered Response
+### 3.5.2 Phản hồi phân tầng (Tiered Response)
 
-| Tier                   | Criteria                                             | Action                                                                                   |
-| ---------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Normal**             | `next_state` tier = NORMAL                           | Continue. No overhead beyond map update.                                                 |
-| **Edge (Gray Zone)**   | `next_state` tier = EDGE, or token is OOV (not in Σ) | Capture window, send to Rust Agent → offline Transformer for deep analysis. No blocking. |
-| **Rejecting (Attack)** | No entry in `transition_table` for `(state, token)`  | BLOCK / KILL / ALERT.                                                                    |
+| Tầng                     | Tiêu chí                                                           | Hành động                                                                                   |
+| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **Normal**               | Tầng của `next_state` = NORMAL                                     | Tiếp tục. Không tốn thêm chi phí ngoài việc cập nhật map.                                   |
+| **Edge (Vùng xám)**      | Tầng của `next_state` = EDGE, hoặc token là OOV (không có trong Σ) | Thu thập window, gửi tới Rust Agent → Transformer ngoại tuyến để phân tích sâu. Không chặn. |
+| **Rejecting (Tấn công)** | Không có mục nhập trong `transition_table` cho `(state, token)`    | BLOCK / KILL / ALERT.                                                                       |
 
-**Edge state definition:** States whose training-time visit frequency falls below a percentile threshold. These states represent rare but seen behavior during training — suspicious enough to warrant deep analysis, not immediately blocked.
+**Định nghĩa trạng thái Edge:** Các trạng thái có tần suất xuất hiện trong thời gian huấn luyện thấp hơn một ngưỡng phân vị (percentile threshold). Những trạng thái này đại diện cho các hành vi hiếm gặp nhưng đã từng thấy trong quá trình huấn luyện — đủ nghi ngờ để cần phân tích sâu, nhưng không chặn ngay lập tức.
 
-### 3.5.3 Mimicry Attack Resilience
+### 3.5.3 Khả năng kháng Mimicry Attack
 
-An attacker who pads an exploit sequence with benign-looking syscalls to stretch it across window boundaries will cause the DFA pointer to follow an atypical transition path. Because the DFA is a strict whitelist, even benign tokens in an unusual state context will lack valid transitions — the DFA rejects regardless of padding length. This property is a consequence of the DFA structure, not a separate rule.
+Kẻ tấn công chèn các syscall trông có vẻ lành tính vào chuỗi khai thác để kéo giãn nó qua các ranh giới window sẽ khiến con trỏ DFA đi theo một lộ trình chuyển đổi không điển hình. Vì DFA là một whitelist nghiêm ngặt, ngay cả các token lành tính trong một ngữ cảnh trạng thái bất thường cũng sẽ thiếu các bước chuyển hợp lệ — DFA sẽ từ chối bất kể độ dài của phần đệm (padding). Thuộc tính này là hệ quả từ cấu trúc DFA, không phải là một quy tắc riêng biệt.
 
-### 3.5.4 Continuous Update Loop
+### 3.5.4 Vòng lặp cập nhật liên tục
 
-If the Transformer determines a captured Edge window is a false positive (e.g., caused by a software update introducing new behavior):
+Nếu Transformer xác định một window Edge thu thập được là false positive (ví dụ: do cập nhật phần mềm giới thiệu hành vi mới):
 
-1. The new transition pattern is added to the training set.
-2. DFA is re-extracted (or incrementally updated).
-3. New `transition_table` entries are atomically written to the BPF map.
+1. Mẫu chuyển đổi mới được thêm vào tập huấn luyện.
+2. DFA được trích xuất lại (hoặc cập nhật tăng dần).
+3. Các mục nhập `transition_table` mới được ghi nguyên tử vào BPF map.
 
-No kernel reload required. The per-thread state pointer continues from its current position.
+Không cần nạp lại kernel. Con trỏ trạng thái theo từng thread tiếp tục từ vị trí hiện tại của nó.

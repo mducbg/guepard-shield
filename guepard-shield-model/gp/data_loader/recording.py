@@ -57,7 +57,7 @@ def load_recording(
                 continue
             syscalls.append(Syscall(
                 timestamp=int(fields[0]),
-                thread_id=int(fields[1]),
+                thread_id=int(fields[4]),
                 syscall=fields[5],
             ))
             if max_syscalls is not None and len(syscalls) >= max_syscalls:

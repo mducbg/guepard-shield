@@ -47,3 +47,5 @@ results/
 # --- Tools ---
 .claude
 .agents
+.gemini
+.codex

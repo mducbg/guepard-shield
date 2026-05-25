@@ -28,13 +28,31 @@ syscalls). Vì vậy, chuỗi syscall cung cấp một nguồn quan sát quan
 trọng để mô tả hành vi của tiến trình ở ranh giới giữa không gian
 người dùng (user space) và không gian hạt nhân (kernel space).
 
+Sự dịch chuyển mạnh mẽ sang kiến trúc vi dịch vụ và điện toán đám mây
+(cloud-native) mang đến những thách thức mới cho công tác giám sát an
+ninh. Trong các môi trường này, các tiến trình thường có vòng đời
+ngắn, được triển khai dưới dạng các container và có hành vi tương tác
+mạng phức tạp. Các giải pháp bảo mật truyền thống dựa trên vùng biên
+(perimenter-based security) như tường lửa hay IDS mạng dần bộc lộ
+hạn chế khi không thể quan sát được các hành vi "đông-tây" (east-west
+traffic) bên trong cụm máy chủ hoặc các hành vi khai thác lỗ hổng trực
+tiếp trên ứng dụng. Điều này thúc đẩy nhu cầu về các hệ thống giám
+sát tại chỗ (host-based), có khả năng bám sát thực thi của từng tiến
+trình để phát hiện sớm các dấu hiệu bất thường ngay khi cuộc tấn công
+vừa vượt qua lớp bảo vệ bên ngoài.
+
 Để bảo vệ máy chủ, các hệ thống phát hiện xâm nhập trên máy chủ
 (Host-based Intrusion Detection Systems - HIDS) dựa trên syscall đã
 được nghiên cứu trong nhiều năm. Tuy nhiên, khi chuyển từ phát hiện
 ngoại tuyến sang giám sát tại thời điểm chạy, các hệ thống này thường
 gặp một đánh đổi quan trọng giữa khả năng mô hình hóa hành vi phức
-tạp và chi phí thực thi. Luận văn này gọi khoảng cách đó là khoảng
-cách thực thi chính sách bảo mật (enforcement gap):
+tạp và chi phí thực thi. Thách thức lớn nhất nằm ở việc các cuộc tấn
+công hiện đại ngày càng tinh vi hơn, sử dụng các kỹ thuật tấn công
+không tệp tin (fileless attacks) hoặc khai thác bộ nhớ (memory
+exploitation) để thực thi mã độc mà không để lại dấu vết trên đĩa
+cứng. Những hành vi này chỉ có thể được nhận diện thông qua việc
+phân tích sâu ngữ cảnh của các lời gọi hệ thống theo thời gian.
+Luận văn này gọi khoảng cách đó là khoảng cách thực thi chính sách bảo mật (enforcement gap):
 
 \begin{enumerate}
   \item Các phương pháp phát hiện dựa trên học sâu (Deep Learning)
@@ -146,12 +164,64 @@ tiếp cận liên quan.
   }
 \end{table}
 
-Từ bảng so sánh trên, khoảng trống chính nằm ở việc kết nối hai nhóm
+Từ các bảng so sánh trên, khoảng trống chính nằm ở việc kết nối hai nhóm
 khả năng: học được mẫu tuần tự từ dữ liệu và kiểm tra được mẫu đó với
 chi phí thấp tại runtime. Luận văn này tập trung vào một quy trình
 đầu-cuối để xấp xỉ ranh giới quyết định (decision boundary) của mô
 hình Transformer bằng một biểu diễn trạng thái hữu hạn, từ đó đưa cơ
 chế phát hiện về dạng có thể triển khai bằng eBPF\@.
+
+\subsection{Hình thức hóa bài toán}
+\label{subsec:formal}
+
+Để đặt nền tảng cho việc thiết kế Guepard Shield, bài toán phát hiện
+bất thường dựa trên syscall cần được hình thức hóa dưới góc độ của
+mô hình hóa ngôn ngữ (language modeling) và lý thuyết automata.
+
+Gọi $\mathcal{S} = \{s_1, s_2, \dots, s_{|V|}\}$ là tập hữu hạn các
+tên lời gọi hệ thống (vocabulary). Một thực thi của tiến trình được
+biểu diễn dưới dạng một chuỗi các sự kiện $X = (x_1, x_2, \dots, x_T)$,
+trong đó mỗi $x_t \in \mathcal{S}$ là syscall tại thời điểm $t$.
+Mục tiêu của pha huấn luyện mô hình Teacher (Transformer) là học một
+hàm phân phối xác suất có điều kiện:
+\begin{equation}
+  P(x_t \mid x_{t-k}, \dots, x_{t-1})
+\end{equation}
+trong đó $k$ là chiều dài ngữ cảnh (context window). Một chuỗi quan
+sát được coi là bất thường nếu xác suất xuất hiện của nó thấp hơn một
+ngưỡng $\tau$ được định nghĩa trước. Tuy nhiên, việc tính toán trực
+tiếp giá trị xác suất này trong nhân hệ điều hành là không khả thi do
+các ràng buộc về tài nguyên đã nêu.
+
+Thay vào đó, mục tiêu của luận văn là tìm một xấp xỉ rời rạc dưới dạng
+Deterministic Finite Automaton (DFA), ký hiệu là $M = (Q, \Sigma, \delta, q_0, F)$.
+Trong đó:
+\begin{itemize}
+  \item $Q$ là tập hữu hạn các trạng thái, được trích xuất từ việc
+    phân cụm không gian vector ẩn của Transformer.
+  \item $\Sigma \subseteq \mathcal{S}$ là bảng chữ cái (tập syscall).
+  \item $\delta: Q \times \Sigma \to Q$ là hàm chuyển trạng thái.
+  \item $q_0 \in Q$ là trạng thái bắt đầu.
+  \item $F \subset Q$ là tập các trạng thái chấp nhận (hành vi bình thường).
+\end{itemize}
+Thách thức của việc hình thức hóa này nằm ở chỗ Transformer có khả năng
+ghi nhớ ngữ cảnh dài thông qua cơ chế chú ý, trong khi DFA truyền thống
+chỉ phụ thuộc vào trạng thái hiện tại. Luận văn cần giải quyết mâu thuẫn
+này bằng cách chọn lựa một biểu diễn trạng thái ẩn đủ giàu thông tin để
+duy trì tính "Markov" cần thiết cho DFA mà không làm bùng nổ số lượng
+trạng thái.
+
+Một vấn đề nghiên cứu then chốt khác là khả năng chống lại các cuộc
+tấn công bắt chước (Mimicry Attacks). Trong bối cảnh syscall, kẻ tấn
+công có thể chèn thêm các lời gọi hệ thống "vô hại" (no-op hoặc các
+syscall bình thường) vào giữa các bước của mã độc để làm thay đổi
+biểu diễn vector của chuỗi, từ đó đánh lừa các hệ thống phát hiện
+bất thường. Việc trích xuất DFA cần đảm bảo rằng cấu trúc whitelist
+của automata đủ chặt chẽ để các hành vi chèn đệm này vẫn đưa con trỏ
+trạng thái vào vùng từ chối, hoặc ít nhất là đưa vào các trạng thái
+biên (edge states) để kích hoạt cơ chế kiểm tra sâu hơn ở không gian
+người dùng. Khả năng chịu đựng của DFA đối với các biến đổi trình tự
+này là một trong những trọng tâm phân tích của luận văn.
 
 \section{Mục tiêu nghiên cứu và Khung khái niệm}
 \label{sec:muc-tieu}
@@ -166,6 +236,16 @@ lực biểu diễn của Transformer, mà đóng vai trò như một xấp xỉ
 của các mẫu hành vi quan trọng, phù hợp hơn với yêu cầu thực thi bằng
 eBPF trong Linux kernel.
 
+Để đạt được mục tiêu này, luận văn áp dụng phương pháp nghiên cứu thực
+nghiệm phối hợp giữa phân tích lý thuyết và triển khai hệ thống. Quá
+trình huấn luyện và trích xuất DFA được thực hiện trên các bộ dữ liệu
+chuẩn về syscall như LID-DS \cite{grimmer2022dataset} và bộ dữ liệu do
+chúng tôi tự thu thập trên các hệ thống thực tế (DongTing). Việc sử
+dụng đa dạng các bộ dữ liệu giúp đánh giá được khả năng tổng quát hóa
+của mô hình trên nhiều loại tải công việc và các kịch bản tấn công
+khác nhau, từ các cuộc tấn công Brute-force đơn giản đến các kỹ thuật
+khai thác lỗ hổng CVE phức tạp.
+
 Hệ thống được đặt trong mô hình thời gian thực theo từng luồng tiến
 trình (thread-level syscall stream). Thay vì thu thập toàn bộ nhật ký
 rồi phân tích ngoại tuyến, Guepard Shield duy trì trạng thái DFA cho
@@ -175,14 +255,17 @@ dựa trên bảng chuyển trạng thái đã nạp trước. Nếu chuỗi qua
 đưa DFA tới trạng thái không xác định hoặc trạng thái từ chối
 (rejecting state), hệ thống có thể đánh dấu hành vi đó là bất thường
 và chuyển sự kiện nghi vấn lên không gian người dùng để xử lý tiếp.
+Điều này giúp giảm thiểu đáng kể lượng dữ liệu cần chuyển vùng (context
+switching) giữa kernel và user space, vốn là nút thắt cổ chai về hiệu
+năng trong các hệ thống giám sát truyền thống.
 
 Quy trình nghiên cứu được chia thành 4 giai đoạn, từ chuẩn bị dữ
 liệu đến thực thi trong kernel, như minh họa trong Hình~\ref{fig:pipeline}:
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \begin{tikzpicture}[
-      node distance=1.5cm,
+      node distance=1.2cm,
       block/.style={rectangle, draw, fill=blue!10, text width=9.5cm,
       align=center, rounded corners, minimum height=1cm, line width=0.8pt},
       line/.style={draw, -{Latex[scale=1.2]}, line width=1pt}
@@ -221,7 +304,7 @@ cần đánh giá lại. Cách tổ chức này giữ đường đi runtime tron
 sâu cho các bước phân tích nặng hơn. Sự tương tác này được mô tả
 trong Hình~\ref{fig:runtime}.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \resizebox{\textwidth}{!}{
     \begin{tikzpicture}[
@@ -321,6 +404,48 @@ Việc sử dụng DFA cho đường đi runtime có hai lý do chính:
     các thao tác tra cứu và cập nhật trạng thái đơn giản, dễ đáp ứng
     hơn yêu cầu của Verifier.
 \end{itemize}
+
+\enlargethispage{2\baselineskip}
+
+\section{Tầm quan trọng của nghiên cứu}
+\label{sec:tam-quan-trong}
+
+Việc nghiên cứu và phát triển hệ thống Guepard Shield không chỉ mang ý
+nghĩa về mặt học thuật trong việc kết nối giữa học sâu và hệ thống máy
+tính, mà còn có giá trị thực tiễn cao trong bối cảnh an ninh mạng hiện
+nay.
+
+Thứ nhất, nghiên cứu góp phần giải quyết bài toán hiệu năng của các hệ
+thống HIDS hiện đại. Bằng cách chưng cất tri thức từ các mô hình nơ-ron
+phức tạp sang biểu diễn automata, chúng ta có thể tận dụng được sức
+mạnh của AI trong việc học các mẫu hành vi tinh vi mà không phải hy
+sinh tốc độ xử lý của hệ điều hành. Điều này đặc biệt quan trọng đối
+với các nhà cung cấp dịch vụ đám mây (Cloud Service Providers), nơi mà
+mỗi mili giây độ trễ thêm vào đường đi syscall có thể dẫn tới thiệt hại
+đáng kể về trải nghiệm người dùng và chi phí tài nguyên.
+
+Thứ hai, việc sử dụng eBPF làm công cụ thực thi chính sách giúp tăng
+cường tính an toàn và ổn định cho máy chủ. So với việc sử dụng kernel
+modules truyền thống (thường có nguy cơ gây lỗi "kernel panic" nếu mã
+nguồn không ổn định), eBPF cung cấp một môi trường thực thi được kiểm
+chứng (sandboxed), đảm bảo rằng cơ chế giám sát không gây ảnh hưởng
+tiêu cực đến sự vận hành của nhân hệ điều hành. Guepard Shield tận dụng
+lợi thế này để triển khai một whitelist động được học tự động từ dữ
+liệu, thay thế cho các tập luật tĩnh vốn dễ bị lỗi thời.
+
+Thứ ba, nghiên cứu này mở ra một hướng đi mới cho việc triển khai AI
+tại biên (AI at the edge) hoặc trong các môi trường có ràng buộc khắt
+khe về tài nguyên. Quy trình trích xuất và tối ưu DFA từ Transformer có
+thể được mở rộng cho các bài toán khác ngoài phát hiện xâm nhập, chẳng
+hạn như kiểm soát luồng thực thi phần mềm (Control-Flow Integrity)
+hoặc giám sát giao thức mạng tại tầng liên kết dữ liệu.
+
+Cuối cùng, kết quả của luận văn cung cấp một công cụ hỗ trợ cho các
+chuyên gia phân tích an ninh (SOC Analysts) thông qua việc ánh xạ các
+cảnh báo bất thường với các kỹ thuật tấn công trong ma trận MITRE
+ATT\&CK. Điều này giúp thu hẹp khoảng cách giữa việc "phát hiện một cái
+gì đó lạ" và việc "hiểu kẻ tấn công đang làm gì", từ đó đẩy nhanh quá
+trình phản ứng và xử lý sự cố.
 
 \section{Các đóng góp dự kiến}
 \label{sec:donggop}

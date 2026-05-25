@@ -1,20 +1,156 @@
 \documentclass[../main.tex]{subfiles}
 \begin{document}
-Chương này có độ dài không quá 10 trang. Chương này sinh viên trình bày về phân tích rõ ngữ cảnh bài toán cũng như các kết quả nghiên cứu tương tự. Đồng thời, sinh viên có thể trình bày thêm về các kiến thức nền tảng.
 
-\textbf{Lưu ý}: Mỗi chương nên có thêm 1 đoạn mở đầu chương và kết thúc chương, mở đầu giới thiệu những nội dung sẽ trình bày trong chương, kết thúc tổng kết lại các nội dung đã trình bày.
+Chương 2 trình bày tổng quan tài liệu và cơ sở lý thuyết làm nền tảng cho việc nghiên cứu các giải pháp phát hiện bất thường dựa trên chuỗi lời gọi hệ thống. Nội dung chương tập trung vào việc làm rõ phạm vi nghiên cứu chung, phân tích các nghiên cứu liên quan trong lĩnh vực phát hiện bất thường qua chuỗi lời gọi hệ thống (system calls), các phương pháp trích xuất luật hoặc automata từ mô hình học sâu, và các cơ chế giám sát thực thi thời gian thực bằng eBPF. Bên cạnh đó, chương này cũng hệ thống hóa các kiến thức nền tảng về mạng Transformer Decoder-only, lý thuyết Automata hữu hạn đơn định (DFA), và kiến trúc eBPF trong nhân Linux, làm cơ sở khoa học để giải quyết bài toán chưng cất tri thức từ mô hình học máy phức tạp thành luật thực thi hiệu quả trong nhân hệ điều hành.
 
-\section{Scope of Research}
-\ldots
+\section{Phạm vi nghiên cứu (Scope of Research)}
+\label{sec:scope}
 
-\section{Related Work}
-Trong phần này sinh viên trình bày các nghiên cứu liên quan (related work), chú ý phân tích rõ những ưu nhược điểm của chúng. Từ đó, nêu bật lên động lực để thực hiện nghiên cứu của đồ án này.
+Trong bài toán phát hiện xâm nhập dựa trên lời gọi hệ thống (system call) cho môi trường máy chủ, phạm vi nghiên cứu thường được giới hạn và định nghĩa bởi các yếu tố cốt lõi bao gồm không gian giám sát, mô hình đe dọa, và các bộ dữ liệu chuẩn được sử dụng để đánh giá.
 
+\subsection{Không gian và Lớp giám sát (Monitor Layer)}
+Các nghiên cứu trong lĩnh vực này tập trung vào bài toán phát hiện bất thường ở mức lời gọi hệ thống (syscall-level anomaly detection) trên các máy chủ Linux chạy các khối lượng công việc container hóa (containerized workloads). Giao diện system call đại diện cho ranh giới phân tách thấp nhất giữa không gian người dùng (user space) và không gian nhân (kernel space). Mọi tương tác của ứng dụng với tài nguyên phần cứng, mạng, tệp tin, hoặc tiến trình khác đều bắt buộc phải đi qua ranh giới này. Do đó, việc giám sát ở mức lời gọi hệ thống cung cấp một cái nhìn toàn diện và khó bị vượt qua bởi các hành vi xâm nhập thông thường.
 
-\section{Tên của kiến thức nền tảng số 1}
-Tiêu đề và nội dung của chương này sẽ thay đổi tuỳ thuộc vào từng đồ án. Chú ý trình bày những kiến thức có liên quan mật thiết nhất đối với đồ án của mình, Tránh trình bày lan man những kiến thức phổ thông không cần thiết. 
+\subsection{Mô hình đe dọa (Threat Model)}
+Mô hình đe dọa mục tiêu thường tập trung vào giai đoạn hậu xâm nhập (post-exploitation), giả định rằng kẻ tấn công đã thực thi thành công mã độc hoặc chiếm được quyền truy cập vào container thông qua các lỗ hổng phần mềm. Các hành vi xâm nhập mục tiêu bao gồm thiết lập kết nối ngược (reverse shell), leo thang đặc quyền (privilege escalation), đánh cắp dữ liệu (data exfiltration), và duy trì sự hiện diện lâu dài trong hệ thống (persistence). Kẻ tấn công được coi là hoạt động dưới dạng hộp đen (black-box), nghĩa là họ không có tri thức về các cơ chế chính sách bảo mật đang được thực thi tại runtime để giám sát hành vi của hệ thống.
 
-\section{Tên của kiến thức nền tảng số 2}
-Tiêu đề và nội dung của chương này sẽ thay đổi tuỳ thuộc vào từng đồ án. Chú ý trình bày những kiến thức có liên quan mật thiết nhất đối với đồ án của mình, Tránh trình bày lan man những kiến thức phổ thông không cần thiết. 
+\subsection{Giới hạn ngoài phạm vi (Out of Scope)}
+Phạm vi nghiên cứu này thường không giải quyết các vấn đề liên quan đến tấn công né tránh đối kháng (adversarial evasion) nhắm trực tiếp vào việc thay đổi phân phối chuỗi syscall để đánh lừa mô hình học máy. Các rootkit mức kernel can thiệp trực tiếp vào cấu trúc dữ liệu của hệ điều hành hoặc các hệ thống phát hiện xâm nhập mức mạng (Network IDS) cũng nằm ngoài phạm vi khảo sát thông thường của các hệ thống HIDS mức syscall.
+
+\subsection{Bộ dữ liệu thử nghiệm}
+Để đánh giá hiệu quả phát hiện bất thường và tối ưu hóa các tham số của hệ thống HIDS, bộ dữ liệu chuẩn LID-DS-2021 \cite{grimmer2022dataset} được sử dụng rộng rãi. Đây là bộ dữ liệu phát hiện xâm nhập máy chủ hiện đại được thiết kế riêng cho các môi trường ảo hóa container (Docker). LID-DS-2021 chứa tổng cộng 17.190 bản ghi syscall được thu thập từ 15 kịch bản tấn công thực tế mô phỏng các lỗ hổng CWE/CVE phổ biến trên máy chủ Linux, cùng với các chuỗi hành vi lành tính đi kèm.
+
+Đặc điểm quan trọng nhất của LID-DS-2021 là việc cung cấp đầy đủ thông tin về định danh luồng (Thread ID - TID), tên tiến trình, nhãn thời gian, và các tham số chi tiết của lời gọi hệ thống. Điều này cho phép hệ thống giám sát phân tách luồng syscall theo từng TID, giải quyết triệt để hiện tượng xen kẽ luồng (interleaving) trong môi trường máy chủ chạy đa tiến trình. Do đó, đây là công cụ chuẩn mực để thực hiện các giai đoạn huấn luyện, tối ưu hóa và kiểm thử hiệu năng của các giải pháp phát hiện xâm nhập dựa trên hành vi tiến trình.
+
+\section{Các nghiên cứu liên quan (Related Work)}
+\label{sec:related_work}
+
+\subsection{Phát hiện bất thường dựa trên chuỗi lời gọi hệ thống}
+Các nghiên cứu về hệ thống phát hiện xâm nhập trên máy chủ (HIDS) dựa trên syscall đã trải qua nhiều giai đoạn phát triển, từ các thuật toán thống kê đơn giản đến các mô hình học sâu phức tạp. 
+
+Phương pháp kinh điển đầu tiên là STIDE (Sequence Time-Delay Embedding) do Forrest và các cộng sự đề xuất \cite{forrest1996sense}. STIDE hoạt động dựa trên cơ chế n-gram, xây dựng một cơ sở dữ liệu chứa tất cả các chuỗi lời gọi hệ thống bình thường có độ dài cố định $n$ thu được trong giai đoạn huấn luyện. Khi vận hành thực tế, bất kỳ chuỗi syscall con nào có độ dài $n$ xuất hiện mà không nằm trong cơ sở dữ liệu bình thường sẽ bị coi là bất thường. Mặc dù STIDE có tốc độ thực thi rất nhanh và thuật toán đơn giản, mô hình này gặp hạn chế lớn do bỏ lỡ các phụ thuộc ngữ cảnh dài hạn và dễ sinh cảnh báo giả khi ứng dụng có nhiều luồng thực thi hợp lệ xen kẽ. Các cải tiến sau đó sử dụng Mô hình Markov ẩn (Hidden Markov Model - HMM) để mô hình hóa sự chuyển dịch trạng thái của tiến trình dưới dạng xác suất, tuy nhiên chi phí tính toán tăng rất nhanh khi kích thước từ vựng (vocabulary) của các syscall mở rộng.
+
+Sự trỗi dậy của học sâu đã thay đổi căn bản cách tiếp cận này. DeepLog \cite{du2017deeplog} giới thiệu việc áp dụng mạng nơ-ron hồi quy (RNN/LSTM) cho bài toán phát hiện bất thường thông qua việc dự đoán phần tử tiếp theo (next-token prediction) trên chuỗi log hoặc chuỗi syscall. Khi xác suất dự đoán của syscall tiếp theo thực tế thấp hơn một ngưỡng định sẵn, hệ thống sẽ gắn cờ cảnh báo. Để giải quyết hiện tượng rò rỉ dữ liệu khi trích xuất đặc trưng bằng Word2Vec truyền thống trên chuỗi syscall, Mvula và các cộng sự \cite{mvula2023evaluating} khuyến nghị sử dụng các phương pháp mã hóa nén như Byte-Pair Encoding (BPE). Dù đạt độ chính xác cao, các mô hình dựa trên LSTM gặp khó khăn lớn trong việc xử lý song song khi huấn luyện và có độ trễ suy luận lớn, không đáp ứng được yêu cầu phản hồi thời gian thực trong nhân hệ điều hành.
+
+Gần đây, cơ chế Self-Attention trong kiến trúc Transformer đã được ứng dụng để mô hình hóa chuỗi syscall. Nghiên cứu của Fournier và các cộng sự \cite{fournier2023language} đã chỉ ra rằng các mô hình ngôn ngữ lớn (như Transformer và Longformer) đạt độ chính xác F1 và AUROC vượt trội (>95\%) trên các bài toán phát hiện bất thường nhờ khả năng nắm bắt tốt các quan hệ ngữ cảnh dài hạn giữa các syscall đứng xa nhau. TransCall \cite{alsiam2026transcall} cũng khai thác Transformer để phát hiện mã độc zero-day dưới dạng xử lý chuỗi syscall tương tự như ngôn ngữ tự nhiên. Tuy nhiên, rào cản lớn nhất của các mô hình Transformer là chi phí tính toán và bộ nhớ cực kỳ lớn. Việc chạy trực tiếp một mô hình Transformer trong nhân hệ điều hành là hoàn toàn bất khả thi do nhân Linux không hỗ trợ các phép tính dấu phẩy động và yêu cầu độ trễ xử lý của mỗi syscall phải ở mức micro giây. Khoảng cách này tạo ra một "khoảng cách thực thi" (enforcement gap) lớn giữa mô hình học máy và môi trường runtime thực tế.
+
+\subsection{Trích xuất luật khả diễn và Automata từ mạng nơ-ron}
+Để vượt qua tính chất "hộp đen" của các mô hình học sâu và đảm bảo tính giải trình trong các hệ thống an ninh mạng (forensic accountability), hướng nghiên cứu về mô hình thế thân giải thích được (interpretable surrogate models) và chưng cất tri thức (Knowledge Distillation) đã nhận được nhiều sự quan tâm. Thay vì cố gắng giải thích các mô hình phức tạp thông qua các công cụ hậu kiểm (post-hoc) như LIME hay SHAP vốn tốn thời gian suy luận phụ và không đảm bảo tính nhất quán, hướng tiếp cận này tìm cách chuyển đổi tri thức từ mạng nơ-ron sang các biểu diễn tường minh, dễ hiểu và có thể thực thi hiệu quả.
+
+\subsubsection{Cơ sở lý thuyết về chưng cất tri thức (Knowledge Distillation)}
+Chưng cất tri thức là một kỹ thuật trong đó một mô hình nhỏ hơn, gọn hơn (Student) được huấn luyện để mô phỏng hành vi của một mô hình lớn, phức tạp hơn (Teacher). Trong bài toán phát hiện xâm nhập, mô hình Teacher (như Transformer) đóng vai trò là một bộ phân loại chính xác nhưng nặng nề, trong khi Student (như DFA) cần đạt được độ trung thực (fidelity) cao nhất có thể so với Teacher tại các vùng quyết định nhạy cảm. Quá trình này không chỉ là việc bắt chước nhãn đầu ra (hard labels) mà còn là việc học theo phân phối xác suất (soft targets) của Teacher, giúp Student nắm bắt được ranh giới quyết định mượt mà hơn.
+
+\subsubsection{Kỹ thuật trích xuất Automata từ RNN và Transformer}
+Trong số các biểu diễn rời rạc, Automata hữu hạn đơn định (DFA) nổi lên như một ứng viên sáng giá nhờ tính đơn định và chi phí thực thi $O(1)$. Công trình tiêu biểu của Weiss và các cộng sự \cite{ables2024eclectic} đề xuất kỹ thuật trích xuất DFA từ các mạng hồi quy (RNNs) thông qua quy trình gom cụm không gian trạng thái ẩn. Cụ thể, các vector trạng thái ẩn $h_t$ (vốn mang thông tin lịch sử của chuỗi đầu vào) được ánh xạ vào một tập hữu hạn các trạng thái rời rạc $Q$ bằng các thuật toán phân cụm như K-Means hoặc Mean-Shift.
+
+Đối với kiến trúc Transformer, thách thức nằm ở cơ chế self-attention vốn không duy trì một trạng thái ẩn tuần tự duy nhất như RNN. Tuy nhiên, các nghiên cứu gần đây của Herbinger và các cộng sự \cite{herbinger2023leveraging} đã chỉ ra rằng vector nhúng của lớp cuối cùng (final-layer embeddings) vẫn chứa đựng đủ thông tin ngữ cảnh để có thể rời rạc hóa. Việc trích xuất DFA từ Transformer yêu cầu một bước xử lý bổ sung để giải quyết tính không đơn định khi ánh xạ từ không gian liên tục sang các bước chuyển trạng thái rời rạc, thường thông qua các chiến lược cắt tỉa thống kê (statistical pruning) để loại bỏ các chuyển dịch nhiễu hoặc có xác suất thấp.
+
+\subsubsection{Ứng dụng trong an ninh hệ thống và pháp y kỹ thuật số}
+Việc chuyển đổi tri thức sang DFA mang lại lợi ích kép cho an ninh hệ thống. Về mặt vận hành, DFA cho phép triển khai cơ chế whitelist động có khả năng phản hồi ở tốc độ của phần cứng hoặc kernel. Về mặt phân tích, cấu trúc đồ thị của DFA cho phép các chuyên gia bảo mật truy vết ngược lại các lộ trình tấn công dưới dạng các chuỗi trạng thái tường minh. Nếu một chuỗi syscall bị từ chối, DFA có thể chỉ ra chính xác syscall nào và tại ngữ cảnh nào đã gây ra sự vi phạm, điều mà các mô hình Transformer nguyên bản không thể cung cấp một cách trực quan.
+
+Tuy nhiên, khoảng trống nghiên cứu chính nằm ở việc tối ưu hóa quy trình chưng cất này cho các ràng buộc của môi trường thực thi kernel như eBPF. Hầu hết các công trình hiện nay mới chỉ tập trung vào việc đạt được độ trung thực cao về mặt toán học mà chưa xem xét đến giới hạn bộ nhớ của BPF Maps hoặc khả năng xử lý các chuỗi syscall có chiều dài biến thiên trong môi trường máy chủ thực tế. Guepard Shield hướng tới việc lấp đầy khoảng trống này bằng một pipeline tự động hóa từ trích xuất trạng thái ẩn của Transformer Decoder-only đến nạp bảng chuyển DFA vào eBPF.
+
+\subsection{Thực thi chính sách bảo mật thời gian thực qua eBPF}
+Công nghệ eBPF (Extended Berkeley Packet Filter) đại diện cho một bước tiến quan trọng trong kiến trúc nhân Linux, cho phép chạy các chương trình sandboxed hiệu năng cao trực tiếp tại các điểm móc (hooks) như tracepoints hoặc LSM (Linux Security Modules) với chi phí chuyển đổi ngữ cảnh (context switch) bằng không.
+
+Các công cụ bảo mật cloud-native phổ biến hiện nay như Falco và Tetragon \cite{her2025indepth} tận dụng eBPF để thu thập telemetry và thực thi chính sách ở mức nhân. Nghiên cứu so sánh hiệu năng của Her và các cộng sự \cite{her2025indepth} cho thấy Tetragon có thể phát hiện và ngăn chặn các hành vi thoát khỏi container (container escapes) chỉ trong 1.178 giây với mức chiếm dụng CPU tối ưu (~73\%) so với các giải pháp dựa trên không gian người dùng truyền thống. Tuy nhiên, điểm hạn chế cốt lõi của các công cụ này là toàn bộ tập luật (ruleset) phát hiện đều phải được viết thủ công bằng YAML dựa trên tri thức của chuyên gia bảo mật. Cách tiếp cận này mang tính tĩnh, khó bao phủ các chuỗi hành vi phức tạp và dễ bị vượt qua bởi các biến thể tấn công zero-day.
+
+Để khắc phục điều này, một số nghiên cứu gần đây tìm cách đưa mô hình học máy vào thực thi trong kernel qua eBPF. Zhang và các cộng sự \cite{zhang2024realtime} đã thiết kế và triển khai một mạng nơ-ron nhân tạo trực tiếp trong kernel bằng eBPF bằng cách lượng tử hóa mô hình sang số học số nguyên (integer-only arithmetic) để vượt qua giới hạn stack 512 bytes của eBPF verifier. Mô hình đạt thời gian suy luận cực nhanh (3–5 micro giây) nhưng chương trình eBPF này cực kỳ phức tạp, khó bảo trì, và mô hình nơ-ron chạy trong kernel vẫn là một hộp đen không thể giải thích trực tiếp. Bachl và các cộng sự \cite{bachl2021flow} cũng chứng minh việc thực thi cây quyết định (decision tree) trong eBPF tăng 20\% hiệu suất so với không gian người dùng.
+
+Từ các phân tích trên, khoảng trống lớn nhất là việc tự động hóa cầu nối giữa mô hình học sâu tuần tự (Transformer) và bộ thực thi chính sách eBPF. Chưa có giải pháp nào tự động chưng cất tri thức từ mô hình Transformer thành một bảng chuyển trạng thái DFA tối ưu, sau đó nạp bảng chuyển này vào các cấu trúc BPF Maps để thực thi giám sát với độ phức tạp $O(1)$ và khả năng giải thích hoàn toàn. Đây là một khoảng trống kỹ thuật lớn trong việc kết nối khả năng học ngữ cảnh của Transformer với hiệu năng thực thi của eBPF.
+
+\section{Mạng Transformer Decoder-only}
+\label{sec:transformer}
+
+Kiến trúc Transformer Decoder-only là mô hình mạng nơ-ron tự hồi quy (autoregressive) được ứng dụng rộng rãi để xử lý và dự đoán các chuỗi dữ liệu tuần tự. Kiến trúc này loại bỏ phần Encoder và chỉ sử dụng các lớp causal self-attention để mô hình hóa luồng sự kiện theo trình tự thời gian.
+
+Giả sử đầu vào của mô hình là một chuỗi các token biểu diễn các lời gọi hệ thống $S = (s_1, s_2, \ldots, s_T)$, trong đó mỗi $s_t$ thuộc một từ vựng hữu hạn $\Sigma$ đại diện cho tập hợp các syscall được định danh. Chuỗi token này trước tiên được đi qua một lớp nhúng (embedding layer) để chuyển thành chuỗi các vector biểu diễn $H^{(0)} = (h_1^{(0)}, h_2^{(0)}, \ldots, h_T^{(0)})$ với $h_t^{(0)} \in \mathbb{R}^d$.
+
+Tại mỗi lớp self-attention thứ $l$, mô hình tính toán các ma trận Query ($Q$), Key ($K$) và Value ($V$) từ biểu diễn ẩn của lớp trước đó $H^{(l-1)}$ bằng các trọng số tương ứng $W_Q^{(l)}, W_K^{(l)}, W_V^{(l)} \in \mathbb{R}^{d \times d}$:
+\begin{equation}
+  Q^{(l)} = H^{(l-1)} W_Q^{(l)}, \quad K^{(l)} = H^{(l-1)} W_K^{(l)}, \quad V^{(l)} = H^{(l-1)} W_V^{(l)}
+\end{equation}
+
+Để đảm bảo tính nhân quả (causality) trong việc dự đoán phần tử tiếp theo — nghĩa là mô hình tại thời điểm $t$ chỉ được phép chú ý đến các phần tử đứng trước $s_1, \ldots, s_t$ mà không được nhìn thấy tương lai $s_{t+1}, \ldots, s_T$ — một ma trận mặt nạ (causal mask) $M \in \mathbb{R}^{T \times T}$ được cộng vào trước khi tính toán hàm softmax. Các phần tử của ma trận $M$ được định nghĩa như sau:
+\begin{equation}
+  M_{i,j} = \begin{cases} 
+    0 & \text{nếu } i \ge j \\
+    -\infty & \text{nếu } i < j 
+  \end{cases}
+\end{equation}
+
+Công thức tính toán của lớp causal self-attention được viết dưới dạng:
+\begin{equation}
+  \text{Attention}(Q^{(l)}, K^{(l)}, V^{(l)}) = \text{softmax}\left(\frac{Q^{(l)} (K^{(l)})^T}{\sqrt{d}} + M\right) V^{(l)}
+\end{equation}
+
+Mô hình được huấn luyện theo phương pháp học không giám sát bằng cách tối thiểu hóa hàm mất mát entropy chéo cho bài toán dự đoán token tiếp theo (next-token prediction) trên tập dữ liệu chuỗi syscall lành tính:
+\begin{equation}
+  \label{eq:loss}
+  \mathcal{L} = -\frac{1}{T-1} \sum_{t=1}^{T-1} \log P(s_{t+1} \mid s_1, s_2, \ldots, s_t)
+\end{equation}
+
+Trong đó, xác suất điều kiện được tính thông qua lớp tuyến tính cuối cùng (projection layer) và hàm softmax trên vector trạng thái ẩn lớp cuối $h_t^{(L)} \in \mathbb{R}^d$:
+\begin{equation}
+  P(s_{t+1} = \sigma \mid s_1, \ldots, s_t) = \frac{\exp(w_\sigma^T h_t^{(L)} + b_\sigma)}{\sum_{\sigma' \in \Sigma} \exp(w_{\sigma'}^T h_t^{(L)} + b_{\sigma'})}
+\end{equation}
+
+Vector trạng thái ẩn $h_t^{(L)}$ tại vị trí $t$ tích lũy toàn bộ thông tin lịch sử của luồng syscall từ bước $1$ đến $t$. Đặc tính này làm cho vector trạng thái ẩn lớp cuối cùng trở thành đối tượng nghiên cứu tiềm năng trong các kỹ thuật phân cụm trạng thái liên tục để trích xuất automata hữu hạn rời rạc phục vụ mục đích giải thích hoặc thực thi chính sách.
+
+\section{Automata hữu hạn đơn định (DFA)}
+\label{sec:dfa}
+
+Một Automata hữu hạn đơn định (Deterministic Finite Automaton - DFA) là một mô hình toán học biểu diễn một hệ thống có số lượng trạng thái hữu hạn, dịch chuyển giữa các trạng thái dựa trên các ký hiệu đầu vào đơn định. Về mặt hình thức, một DFA được định nghĩa là một bộ 5 thành phần:
+\begin{equation}
+  A = (Q, \Sigma, \delta, q_0, F)
+\end{equation}
+Trong đó:
+\begin{itemize}
+  \item $Q$ là tập hợp hữu hạn và không rỗng các trạng thái ($Q = \{q_0, q_1, \ldots, q_m\}$).
+  \item $\Sigma$ là bảng chữ cái đầu vào hữu hạn (trong bài toán syscall là tập hợp các chỉ số hoặc tên của lời gọi hệ thống nằm trong Vocabulary).
+  \item $\delta: Q \times \Sigma \to Q$ là hàm chuyển trạng thái đơn định. Với mỗi trạng thái hiện tại $q \in Q$ và ký hiệu đầu vào $s \in \Sigma$, tồn tại duy nhất một trạng thái tiếp theo $q' = \delta(q, s) \in Q$.
+  \item $q_0 \in Q$ là trạng thái khởi đầu của hệ thống.
+  \item $F \subseteq Q$ là tập hợp các trạng thái chấp nhận (accepting states).
+\end{itemize}
+
+Trong bài toán phát hiện bất thường sử dụng DFA, tập các trạng thái chấp nhận $F$ thường được thay thế bằng tập các trạng thái từ chối (rejecting hoặc abnormal states) $R \subseteq Q$. Khi chuỗi syscall dẫn DFA đến một trạng thái thuộc $R$, hệ thống sẽ phát tín hiệu cảnh báo xâm nhập.
+
+Đặc tính quan trọng nhất khiến DFA trở thành mục tiêu triển khai lý tưởng trong các hệ thống giám sát hiệu năng cao là tính hiệu quả cực cao về mặt tính toán. Việc chuyển trạng thái chỉ yêu cầu một phép tra cứu bảng chuyển dịch (transition lookup) với độ phức tạp thời gian là $O(1)$ cho mỗi ký hiệu đầu vào:
+\begin{equation}
+  \text{Thời gian xử lý} = O(1), \quad \text{Bộ nhớ lưu trữ} \propto |Q| \times |\Sigma|
+\end{equation}
+DFA không yêu cầu bất kỳ phép tính số thực dấu phẩy động nào và có thể được biểu diễn hoàn toàn bằng các cấu trúc dữ liệu mảng hoặc bảng băm số nguyên tĩnh, hoàn toàn tương thích với các ràng buộc khắt khe của môi trường nhân hệ điều hành.
+
+\section{Công nghệ eBPF (Extended Berkeley Packet Filter)}
+\label{sec:ebpf}
+
+eBPF là một công nghệ mang tính cách mạng trong nhân Linux, cho phép chạy các chương trình tùy biến trực tiếp trong không gian nhân (kernel space) khi các sự kiện hệ thống xảy ra mà không cần sửa đổi mã nguồn kernel hoặc tải các kernel module.
+
+\subsection{Sự tiến hóa từ Classic BPF đến eBPF}
+Nguyên thủy, BPF (Classic BPF - cBPF) được giới thiệu vào năm 1992 như một cơ chế lọc gói tin hiệu quả trong nhân. Tuy nhiên, kể từ phiên bản nhân Linux 3.15, eBPF đã mở rộng phạm vi ứng dụng từ mạng sang giám sát toàn diện hệ thống. Sự khác biệt cốt lõi nằm ở việc eBPF sở hữu tập lệnh rộng hơn (64-bit thay vì 32-bit), số lượng thanh ghi tăng từ 2 lên 10, và khả năng gọi các hàm helper trong nhân. Đặc biệt, eBPF giới thiệu cơ chế JIT (Just-In-Time) compiler, cho phép biên dịch mã bytecode eBPF trực tiếp sang mã máy bản địa của CPU, giúp chương trình đạt hiệu năng thực thi gần tương đương với mã nguồn được biên dịch trực tiếp vào nhân.
+
+\subsection{Cơ chế hoạt động và Điểm móc (Hooks)}
+Các chương trình eBPF hoạt động theo cơ chế hướng sự kiện (event-driven). Chúng được gắn (hooked) vào các vị trí thực thi cụ thể trong kernel, chẳng hạn như tracepoints (ví dụ: \texttt{sys\_enter} kích hoạt khi tiến trình chuẩn bị thực hiện một syscall), kprobes/kretprobes (móc vào các hàm nhân bất kỳ), hoặc các LSM hooks (Linux Security Modules) như AppArmor hay SELinux. Khi sự kiện xảy ra, chương trình eBPF được thực thi để phân tích ngữ cảnh sự kiện đó. Khả năng truy cập vào cấu trúc dữ liệu của nhân thông qua các điểm móc này cho phép eBPF quan sát được các thông tin nhạy cảm như PID, UID, tham số syscall, và ngữ cảnh tiến trình cha-con.
+
+\subsection{Trình xác thực eBPF (Verifier) và Tính an toàn}
+Để đảm bảo an toàn tuyệt đối cho hệ điều hành, nhân Linux tích hợp một trình xác thực tĩnh (verifier) thực hiện kiểm tra mã nguồn eBPF trước khi nạp vào nhân. Trình xác thực áp đặt các ràng buộc an toàn vô cùng nghiêm ngặt:
+\begin{itemize}
+  \item \textbf{Giới hạn ngăn xếp (Stack limit):} Kích thước stack tối đa của một chương trình eBPF chỉ là 512 bytes. Mọi biến cục bộ và cấu trúc dữ liệu tạm thời bắt buộc phải nằm trong giới hạn này. Điều này ngăn chặn việc tiêu tốn quá mức bộ nhớ stack của nhân (kernel stack exhaustion).
+  \item \textbf{Đảm bảo kết thúc (Termination guarantees):} Trình xác thực kiểm tra đồ thị dòng chảy điều khiển (Control Flow Graph - CFG) để đảm bảo không có vòng lặp vô hạn và số lượng chỉ thị lệnh tối đa không vượt quá giới hạn cho phép (thường là 1 triệu chỉ thị lệnh). Mọi nhánh rẽ trong chương trình phải được chứng minh là sẽ kết thúc.
+  \item \textbf{Truy cập bộ nhớ an toàn:} Cấm truy cập trực tiếp vào các vùng nhớ nhân ngẫu nhiên; mọi truy cập bộ nhớ phải qua các hàm helper được kiểm duyệt (như \texttt{bpf\_probe\_read\_kernel}).
+\end{itemize}
+
+\subsection{Cấu trúc BPF Maps và Lưu trữ trạng thái}
+Vì kích thước stack bị giới hạn ở 512 bytes, các chương trình eBPF không thể lưu trữ các cấu trúc dữ liệu lớn trực tiếp trên stack. Thay vào đó, eBPF cung cấp cấu trúc BPF Maps. Đây là các kho lưu trữ dữ liệu dạng khóa - giá trị (key-value stores) hiệu năng cao nằm trong bộ nhớ nhân, hỗ trợ tra cứu với độ phức tạp $O(1)$. Các loại BPF Maps phổ biến bao gồm: \texttt{BPF\_MAP\_TYPE\_HASH}, \texttt{BPF\_MAP\_TYPE\_ARRAY}, hoặc \texttt{BPF\_MAP\_TYPE\_LRU\_HASH}.
+
+Bảng chuyển trạng thái của DFA $\delta(q, s) = q'$ có thể được biểu diễn trong kernel bằng một Hash Map của BPF. Trong cấu trúc này, khóa (key) là một cặp số nguyên bao gồm định danh trạng thái hiện tại và mã số lời gọi hệ thống (syscall ID), còn giá trị (value) tương ứng là trạng thái kế tiếp. Khi một syscall được kích hoạt, chương trình eBPF thực hiện phép tra cứu $O(1)$ trên Map này để cập nhật trạng thái DFA của luồng tiến trình hiện tại (thường được lưu trong một \texttt{per-thread state map} riêng biệt).
+
+\subsection{Tính di động và eBPF Ecosystem (BTF \& CO-RE)}
+Thách thức lớn nhất của eBPF truyền thống là sự phụ thuộc vào cấu trúc dữ liệu cụ thể của từng phiên bản nhân Linux (kernel version dependency). Để giải quyết vấn đề này, công nghệ BTF (BPF Type Format) và cơ chế CO-RE (Compile Once – Run Everywhere) đã được giới thiệu. BTF cung cấp siêu dữ liệu (metadata) về các kiểu dữ liệu trong nhân, trong khi CO-RE cho phép trình nạp (loader) ở không gian người dùng thực hiện việc điều chỉnh địa chỉ (relocation) mã bytecode eBPF tại thời điểm chạy. Nhờ đó, một chương trình eBPF có thể chạy trên nhiều phiên bản nhân khác nhau mà không cần biên dịch lại, một yếu tố then chốt cho việc triển khai Guepard Shield trên các môi trường đám mây đa dạng.
+
+\subsection{Cập nhật nguyên tử và Nạp nóng (Atomic Update \& Hot-reload)}
+Một đặc tính ưu việt của BPF Maps là hỗ trợ các thao tác cập nhật nguyên tử (atomic map updates). Điều này cho phép một tiến trình chạy ở không gian người dùng có thể ghi đè bảng chuyển trạng thái DFA mới vào BPF Maps mà không cần dừng hoặc dỡ bỏ chương trình eBPF đang giám sát trong kernel. Khả năng này đảm bảo hệ thống có thể cập nhật động các chính sách bảo mật hoặc điều chỉnh trạng thái DFA khi phát hiện sự dịch chuyển phân phối (concept drift) hoặc khi cần tối ưu hóa automata dựa trên dữ liệu mới mà không gây gián đoạn quá trình giám sát thời gian thực.
+
+Tóm lại, công nghệ eBPF không chỉ cung cấp một hạ tầng thu thập dữ liệu hiệu năng cao mà còn đóng vai trò là một bộ thực thi chính sách (enforcement engine) mạnh mẽ. Các ràng buộc của verifier và đặc tính của BPF Maps là những yếu tố quyết định đến cách chúng ta thiết kế và rời rạc hóa mô hình DFA từ Transformer. Việc tận dụng BTF và CO-RE giúp Guepard Shield đạt được tính linh hoạt và khả năng triển khai rộng rãi trong các hệ thống Linux hiện đại.
 
 \end{document}

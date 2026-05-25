@@ -17,11 +17,9 @@ from sklearn.metrics import (
 )
 
 
-def select_threshold(val_scores: np.ndarray, percentile: float = 99.5) -> tuple[float, float]:
-    """Return (percentile_threshold, mu+3sigma_threshold)."""
-    tau_pct = float(np.percentile(val_scores, percentile))
-    tau_sig = float(val_scores.mean() + 3 * val_scores.std())
-    return tau_pct, tau_sig
+def select_threshold(val_scores: np.ndarray, percentile: float = 99.5) -> float:
+    """Return the given percentile of val_scores as an anomaly threshold."""
+    return float(np.percentile(val_scores, percentile))
 
 
 def evaluate(

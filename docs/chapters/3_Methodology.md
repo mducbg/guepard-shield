@@ -102,6 +102,8 @@ Chuỗi syscall của 1 chương trình được phân đoạn thành các slidi
 
 Các window được gán nhãn bằng cách sử dụng dấu thời gian khai thác (exploit timestamps) từ metadata của bộ dữ liệu (tệp JSON của LID-DS): một window là **attack** nếu nó trùng lặp với khoảng thời gian khai thác, ngược lại là **normal**. Nhãn này chỉ được sử dụng cho đánh giá ngoại tuyến — không dùng để huấn luyện.
 
+**Hạn chế của convention gán nhãn LID-DS:** Nhãn attack được gán cho *toàn bộ phần tail* của recording kể từ `exploit_start`, vì bộ dữ liệu không có thông tin về thời điểm kết thúc khai thác. Phân tích thực nghiệm (xem §5.5.4) cho thấy **98.85%** windows được gán nhãn attack thực chất chứa hành vi syscall bình thường (post-exploit server activity), và model đúng đắn gán NLL thấp cho chúng. Hệ quả: (1) AUROC = 0.85 được đo trên một bài toán phân loại mà 98.85% "positive examples" thực chất là hành vi bình thường, nên con số này cần được diễn giải thận trọng; (2) evaluation DFA ở Giai đoạn 3 phải dùng **per-recording detection rate** thay vì per-window accuracy để tránh đếm false negative trên các windows thực chất bình thường.
+
 **Lý do chọn W nhỏ:**
 
 - Hành vi tấn công (điểm khai thác) có tính cục bộ tạm thời (temporal locality) cao — thường hoàn thành trong vòng vài chục syscall.
@@ -138,6 +140,8 @@ Chỉ token cuối cùng được tính điểm. $W-1$ token đứng trước đ
 
 Đánh giá chính: AUROC và F1 cấp độ window so với nhãn exploit-timestamp. AUROC và F1 cấp độ bản ghi (recording-level) (gom nhóm điểm số tối đa cho mỗi bản ghi) được báo cáo như một chẩn đoán bổ sung để phù hợp với giao thức đánh giá LID-DS tiêu chuẩn.
 
+**Lưu ý về nhiễu nhãn:** Phân tích định lượng (§5.5.4) cho thấy 98.85% windows được gán nhãn attack trong LID-DS thực chất là hành vi bình thường xảy ra sau sự kiện khai thác — server quay lại trạng thái vận hành bình thường trong khi LID-DS vẫn giữ nhãn attack cho toàn bộ phần tail của recording. Đây là hạn chế có tính hệ thống của bộ dữ liệu, không phải lỗi của model.
+
 ---
 
 ## 3.4 Giai đoạn 3 — Student: Trích xuất DFA
@@ -152,7 +156,9 @@ Nhờ cơ chế causal self-attention, $h_t$ mã hóa toàn bộ ngữ cảnh nh
 
 ### 3.4.2 Rời rạc hóa trạng thái qua K-Means
 
-Chạy Transformer đã huấn luyện trên tất cả các window huấn luyện bình thường. Thu thập tất cả các vector $h_t$ — mỗi token một vector cho mỗi window. Áp dụng gom cụm K-Means với $K$ cụm.
+Với mỗi vị trí $t$ trong tập huấn luyện bình thường, tạo một **dense window** $w_t = [s_{t-W+1}, \ldots, s_t]$ (padding trái bằng `<PAD>` nếu $t < W$). Chạy `encode(w_t)` để lấy hidden state của last-token $h_t \in \mathbb{R}^d$ — mỗi $h_t$ có context đầy đủ $W$ token. Áp dụng gom cụm K-Means với $K$ cụm trên tập $\{h_t\}$ (một vector mỗi syscall position).
+
+**Lý do dùng stride=1 (dense windows) thay vì lấy tất cả position trong mỗi window train:** Các $h_t$ ở đầu window (position 1–2) chỉ thấy 1–2 token context — kém ổn định khi clustering. Dense window đảm bảo mọi $h_t$ đều có context đầy đủ $W$. API `encode()` không thay đổi; chỉ khác cách tạo windows.
 
 Mỗi centroid của cụm $c_k$ định nghĩa một trạng thái DFA $q_k \in Q$. Một trạng thái ẩn $h$ được ánh xạ tới trạng thái $q_k$ trong đó $k = \arg\min_j \|h - c_j\|_2$.
 
@@ -163,11 +169,10 @@ $K$ là một siêu tham số chi phối sự **đánh đổi giữa độ chín
 
 ### 3.4.3 Xây dựng bước chuyển (Transition)
 
-Đối với mỗi cặp token liên tiếp $(s_t, s_{t+1})$ trong dữ liệu huấn luyện:
+Sau khi có $h_t$ tại mỗi vị trí $t$ (từ §3.4.2), với mỗi cặp vị trí liên tiếp $(t,\ t+1)$ cùng bản ghi:
 
-1. Tính $h_t$ và $h_{t+1}$ qua forward pass.
-2. Ánh xạ tới các trạng thái: $A = \text{cluster}(h_t)$, $B = \text{cluster}(h_{t+1})$.
-3. Ghi lại bước chuyển ứng viên: $\delta(A,\ s_{t+1}) \to B$.
+1. Tra cứu $A = \text{cluster}(h_t)$, $B = \text{cluster}(h_{t+1})$.
+2. Ghi lại bước chuyển ứng viên: $\delta(A,\ s_{t+1}) \to B$.
 
 Kết quả thô là một **quan hệ** chuyển đổi (NFA), không phải là một hàm, vì cùng một cặp $(A, s)$ có thể ánh xạ tới các trạng thái đích khác nhau trên các chuỗi khác nhau.
 
@@ -184,7 +189,21 @@ Tính không xác định phát sinh khi phép chiếu K-Means làm mất thông
 
 **Lý do chọn S4 làm ứng viên chính:** Các khối lượng công việc server bình thường có tính lặp lại cao. Sự phân bố các bước chuyển bị lệch mạnh: một nhánh chiếm ưu thế (happy path), trong khi các nhánh thiểu số ($< \theta$) là các tạo vật của quá trình lượng tử hóa K-Means hơn là sự biến đổi hành vi thực sự.
 
-### 3.4.5 Xuất DFA
+### 3.4.5 Đánh giá DFA (Evaluation Protocol)
+
+Do đặc điểm gán nhãn của LID-DS (xem §5.5.4), **metric chính để đánh giá DFA là tỷ lệ phát hiện cấp độ bản ghi (per-recording detection rate — DR)**:
+
+$$\text{DR} = \frac{\text{số bản ghi tấn công có ít nhất 1 window bị từ chối}}{\text{tổng số bản ghi tấn công}}$$
+
+**Lý do:** 98.85% windows được gán nhãn attack trong LID-DS thực chất là hành vi bình thường xảy ra sau thời điểm `exploit_start` — server đã trở về trạng thái vận hành bình thường nhưng LID-DS vẫn duy trì nhãn attack cho toàn bộ phần tail. DFA **đúng** khi chấp nhận những windows này; tính chúng là False Negative là sai về mặt ngữ nghĩa. DR đặt câu hỏi đúng: *"Trong một recording có tấn công thực sự, DFA có bắt được ít nhất một khoảnh khắc tấn công không?"*
+
+Metric phụ (chỉ mang tính chẩn đoán):
+- **TPR_window**: tỷ lệ từ chối trên raw labels cấp window — bị pha loãng bởi 98.85% nhãn nhiễu, không dùng để so sánh chất lượng.
+- **Fidelity**: tỷ lệ đồng thuận với Teacher trên val set — DFA chấp nhận tất cả đạt ~99.5% fidelity mặc định, chỉ dùng để so sánh các cấu hình với nhau.
+
+FPR được giữ nguyên cách tính (tỷ lệ rejection trên normal windows) vì nhãn normal trong LID-DS không bị nhiễm.
+
+### 3.4.6 Xuất DFA
 
 DFA hoàn thiện được xuất ra `dfa_config.json` và được nạp vào các eBPF maps:
 

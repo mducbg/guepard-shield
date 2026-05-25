@@ -1,9 +1,7 @@
-"""Shared project paths for Guepard Shield.
+"""Shared project paths for Phase 1 (EDA & preprocessing).
 
-At the moment, the maintained workflow in this repository is Phase 1
-exploration and preprocessing. Keep this module focused on filesystem paths
-used by those scripts rather than on stale Phase 2 / Phase 3 experiment
-hyperparameters.
+Phase 2+ scripts (notebooks/p2/) define their own paths inline and do NOT
+import from this module.
 """
 
 from __future__ import annotations

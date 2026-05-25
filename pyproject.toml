@@ -6,7 +6,7 @@ dependencies = [
   "imodels>=2.0.4",
   "ipykernel>=7.1.0",
   "ipywidgets>=8.1.8",
-  "lightning>=2.6.1",
+  "lightning>=2.6.4",
   "llvmlite>=0.46.0",
   "matplotlib>=3.10.8",
   "numpy>=2.4.1",
@@ -33,3 +33,6 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = "guepard-shield-model"
 module-name = "gp"
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu128"

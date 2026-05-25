@@ -5,7 +5,9 @@ Architecture:
                   RMSNorm → FFN(GELU)             → residual]
   → RMSNorm → Linear(d_model, vocab_size)
 
-Phase 3 hook: encode(x) returns H_final[:, -1, :] (last-token hidden state).
+Phase 3 hook: encode(x) returns the last-token hidden state [B, d_model].
+Called with stride-1 dense windows (one window per syscall position) so that
+every h_t has a full W-token context — used for K-Means state clustering.
 """
 
 from __future__ import annotations
@@ -120,7 +122,7 @@ class SyscallTransformer(LightningModule):
 
     def __init__(
         self,
-        vocab_size: int = 101,
+        vocab_size: int = 102,
         d_model: int = 128,
         n_layers: int = 4,
         n_heads: int = 4,
@@ -176,7 +178,10 @@ class SyscallTransformer(LightningModule):
         return self.head(h)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Return last-token hidden state [B, d_model] — Phase 3 K-Means hook."""
+        """Return last-token hidden state [B, d_model].
+
+        For Phase 3: call with stride-1 dense windows so each h has full W context.
+        """
         h = self.drop(self.embed(x))
         freqs = self._get_freqs(x.shape[1])
         for block in self.blocks:

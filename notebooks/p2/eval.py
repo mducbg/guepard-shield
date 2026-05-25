@@ -195,13 +195,13 @@ def main() -> None:
         )
         del dm_val
 
-        tau_win, _ = select_threshold(val_last, percentile=99.5)
+        tau_win = select_threshold(val_last, percentile=99.5)
 
         val_rec_ids = np.load(DATA_DIR / "val_rec_ids.npy", mmap_mode="r")
         val_rec_scores, _ = recording_level_eval_grouped(
             val_last, np.zeros(len(val_last), dtype=np.int32), val_rec_ids
         )
-        tau_rec, _ = select_threshold(val_rec_scores, percentile=99.5)
+        tau_rec = select_threshold(val_rec_scores, percentile=99.5)
 
         print(f"\n  val stats: min={val_last.min():.4f}  mean={val_last.mean():.4f}  "
               f"p99={np.percentile(val_last, 99):.4f}  max={val_last.max():.4f}")

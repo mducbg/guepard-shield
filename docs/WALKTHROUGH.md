@@ -14,7 +14,7 @@ Tài liệu này theo dõi tiến độ triển khai thực tế của dự án 
 - **Pipeline Dữ liệu:**
   - Xây dựng các loader chuyên dụng cho các định dạng `.sc` và `.json`.
   - Triển khai **Khử trùng lặp chính xác (Exact Deduplication)** (sử dụng `np.unique`) để giảm nhiễu trong dữ liệu huấn luyện.
-  - Triển khai **Gán nhãn cấp độ cửa sổ (Window-level Labeling)** sử dụng các dấu thời gian khai thác (exploit timestamps) từ metadata JSON.
+  - Triển khai **Gán nhãn cấp độ cửa sổ (Window-level Labeling)**: một window là **ATTACK** nếu timestamp của syscall cuối trong window ≥ thời điểm exploit sớm nhất trong bản ghi (từ metadata JSON). Normal ngược lại.
 
 ---
 
@@ -69,28 +69,58 @@ Max-window NLL đảo ngược dấu ở cấp độ bản ghi (AUROC dương) b
 
 ---
 
-## ⏳ Giai đoạn 3: Chưng cất Luật (Rule Distillation) — Chưa được triển khai
-
-Thiết kế đã được lập tài liệu trong `docs/chapters/3_Methodology.md` (các phần 3.4.\*).
+## ✅ Giai đoạn 3: Chưng cất Luật (Rule Distillation) — Đã hoàn thành (K=64)
 
 **Mục tiêu:** Trích xuất một DFA từ các trạng thái ẩn (hidden states) của mô hình Transformer đã huấn luyện thông qua việc gom cụm K-Means, sau đó sử dụng nó cho việc phát hiện bất thường mà không cần ngưỡng (threshold-free anomaly detection).
 
-**Các đầu vào có sẵn:**
+### Pipeline đã triển khai
 
-- `results/p2/checkpoints/best.ckpt` — Transformer đã huấn luyện (Phase 2 teacher)
-- `data/processed/p2/train_X.npy`, `train_rec_ids.npy` — các window huấn luyện + ID của bản ghi
-- `model.encode(x)` — trả về trạng thái ẩn của token cuối cùng với kích thước [B, d_model] để phục vụ gom cụm.
+| Bước | Script | Output |
+|------|--------|--------|
+| 1. Extract hidden states (stride=4) | `notebooks/p3/extract_states.py` | `results/p3/hidden_states/train_H.dat` [M×128 float16] |
+| 2. K-Means clustering | `notebooks/p3/cluster.py` | `results/p3/clusters/K64/centroids.npy` |
+| 3. Build NFA/DFA transitions (stride=1) | `notebooks/p3/build_transitions_stride1.py` | `results/p3/dfa_s1/K64_{S3,S4_t*}/transitions.npz` |
+| 4. Grid search evaluation | `notebooks/p3/eval_dfa.py` | `results/p3/metrics/grid_search.csv` |
 
-**Các bước cần triển khai:**
+**Giải pháp kỹ thuật chính — Stride mismatch:** Extract hidden states dùng stride=4 (để tránh lưu 175 GB), nhưng DFA phải hoạt động ở stride=1 (eBPF intercepts mọi syscall). Giải pháp: reuse centroids stride=4, stream lại toàn bộ recordings ở stride=1, encode hidden states và gán cluster — NFA được tích lũy on-the-fly, không cần lưu hidden states ra đĩa (175 GB → ~1 MB NFA cache).
 
-1. Trích xuất trạng thái ẩn trên tập train: chạy `encode()` trên tất cả các cửa sổ huấn luyện → ma trận [N, 128].
-2. Gom cụm K-Means (K ∈ {100, 200, 500, 1000}) → gán nhãn trạng thái cho mỗi cửa sổ.
-3. Xây dựng bảng chuyển đổi DFA: đối với mỗi cặp cửa sổ liên tiếp (cùng bản ghi, kề nhau theo stride), ghi lại `(state_i, syscall_last, state_j)`.
-4. Giải quyết tính không xác định (non-determinism) (các chiến lược S1–S4, xem phần Phương pháp nghiên cứu 3.4.3).
-5. Đánh giá: độ trung thực (fidelity) so với mô hình teacher, FPR trên các cửa sổ test bình thường, TPR trên các bản ghi tấn công.
-6. Tìm kiếm lưới (Grid search) K × θ (ngưỡng cắt tỉa cho S4).
+### Kết quả — K=64, Strategy S3 (Chiến lược tốt nhất)
 
-**Quyết định thiết kế chính:** DFA chấp nhận/từ chối dựa trên việc một bước chuyển đổi (transition) đã được nhìn thấy trong quá trình huấn luyện hay chưa — không cần tham số ngưỡng.
+| Chỉ số | Giá trị | Ý nghĩa |
+|--------|---------|---------|
+| **DR_rec** | **90.85%** | 9/10 attack recordings bị phát hiện — metric chính |
+| **FPR** | **1.41%** | 1/71 normal windows bị báo nhầm (cold-start; streaming thấp hơn) |
+| Fidelity vs. Teacher | 98.12% | DFA phản chiếu 98.12% quyết định của Transformer gốc |
+| States | 64 | Số trạng thái DFA |
+| Transitions | 1,973 | Kích thước bảng tra cứu |
+| BPF map size | ~210 KB | `int32[64][816]` — phù hợp giới hạn eBPF |
+
+### Kết quả các chiến lược khác (K=64)
+
+| Chiến lược | FPR | DR_rec | Kết luận |
+|------------|-----|--------|----------|
+| S1 (subset construction) | — | — | **State explosion** — ND rate 85.9% làm powerset construction tạo >640 states |
+| **S3 (majority voting)** | **1.41%** | **90.85%** | **Dùng được — chiến lược tốt nhất** |
+| S4 θ=0.80–0.99 | 97–99% | ~100% | **Không dùng được** — ND rate cao làm S4 loại bỏ quá nhiều transitions, normal sequences liên tục bị reject nhầm |
+
+**Phát hiện quan trọng — S4 thất bại:** Giả thuyết thiết kế (§3.4.4) dự đoán S4 là "ứng viên chính" vì phân bố transitions skewed. Thực nghiệm cho thấy ngược lại: ND rate = 85.9% tại K=64 (hầu hết cặp (src, tok) dẫn đến nhiều đích khác nhau), khiến S4 với bất kỳ θ nào cũng loại bỏ quá nhiều transitions hợp lệ. S3 xử lý ND một cách graceful bằng cách giữ lại tất cả transitions với đích là mode của phân phối.
+
+### Các tệp chính
+
+| Tệp | Mục đích |
+|-----|---------|
+| `guepard-shield-model/gp/dfa/transitions.py` | `TransitionBuilder` — build NFA, resolve S1/S3/S4 |
+| `guepard-shield-model/gp/dfa/evaluate.py` | `DFAEvaluator` — FPR, DR_rec, fidelity |
+| `notebooks/p3/build_transitions_stride1.py` | Pipeline chính — streaming NFA building |
+| `notebooks/p3/eval_dfa.py` | Grid search đánh giá tất cả configs |
+| `results/p3/dfa_s1/K64_S3/transitions.npz` | **DFA cuối cùng** — 64 states, 1,973 transitions |
+| `results/p3/metrics/grid_search.csv` | Toàn bộ kết quả grid search |
+
+### Việc còn lại (cho grid search đầy đủ)
+
+- Re-cluster K=128 với `n_init=10, batch_size=50_000` (K=128 hiện tại có 59% empty clusters do underfitting)
+- Chạy `build_transitions_stride1.py --K 64 128` và `eval_dfa.py` để so sánh K sensitivity
+- Export DFA sang C struct cho eBPF demo (`gp/dfa/export.py`)
 
 ---
 

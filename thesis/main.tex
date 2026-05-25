@@ -1,14 +1,16 @@
-\documentclass[a4paper,13pt,3p,twoside]{report}
+\documentclass[a4paper,twoside]{report}
 \usepackage{scrextend}
 \changefontsizes{13pt}
 \usepackage[utf8]{vietnam}
 \usepackage[top=2cm, bottom=2cm, left=3.5cm, right=2.5cm]{geometry}
 \usepackage{xurl}
 \usepackage{appendix}
-\usepackage{babel}
+\usepackage[english]{babel}
 \usepackage{xcolor}
 \usepackage{outlines}
 \usepackage{graphicx} % Cho phép chèn hỉnh ảnh
+\usepackage{tikz}
+\usetikzlibrary{positioning, shapes.geometric, arrows.meta}
 \usepackage{fancybox} % Tạo khung box
 \usepackage{indentfirst} % Thụt đầu dòng ở dòng đầu tiên trong đoạn
 \usepackage{amsthm} % Cho phép thêm các môi trường định nghĩa
@@ -57,9 +59,6 @@
 
 \addbibresource{reference.bib} % chèn file chứa danh mục tài liệu tham khảo vào
 
-\include{lstlisting} % Phần này cho phép chèn code và formatting code
-% như C, C++, Python
-
 \input{glossary}
 
 % ===================================================
@@ -70,7 +69,7 @@
   \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}}
 
-\setlength{\headheight}{10pt}
+\setlength{\headheight}{15.6pt}
 
 \def \TITLE{THE MASTER THESIS}
 \def \AUTHOR{Nguyễn Minh Đức}
@@ -234,7 +233,7 @@ pdfauthor={\AUTHOR}}
 \renewcommand*{\acronymname}{LIST OF ABBREVIATIONS}
 \renewcommand*{\entryname}{Abbreviation}
 \renewcommand*{\descriptionname}{Definition}
-\printnoidxglossaries
+\printnoidxglossary[type=\acronymtype]
 % \phantomsection\addcontentsline{toc}{section}{\numberline {} DANH
 % MỤC THUẬT NGỮ VÀ TỪ VIẾT TẮT}
 
@@ -283,12 +282,6 @@ pdfauthor={\AUTHOR}}
 \newpage
 \chapter{CONCLUSIONS}
 \subfile{Chapter/6_Conclusions}
-
-\newpage
-%\pagestyle{fancy} % Áp dụng header và footer
-\chapter*{SHORT NOTICES ON REFERENCE} %Kết luận và hướng phát triển}
-\label{chapter:reference}
-\subfile{Chapter/7_Reference}
 
 % ===================================================
 \newpage

@@ -1,34 +1,115 @@
 %\makeglossaries
 \makenoidxglossaries
 
-% Danh mục thuật ngữ và từ viết tắt
-\newglossaryentry{iaas}{
+% Danh mục thuật ngữ và từ viết tắt dùng trong luận văn Guepard Shield.
+\newglossaryentry{hids}{
     type=\acronymtype,
-    name={IaaS},
-    description={Dịch vụ hạ tầng},
-    first={Dịch vụ hạ tầng (Infrastructure  as  a  Service - IaaS)}
+    name={HIDS},
+    description={Hệ thống phát hiện xâm nhập trên máy chủ (Host-based Intrusion Detection System)},
+    first={Hệ thống phát hiện xâm nhập trên máy chủ (Host-based Intrusion Detection System - HIDS)}
 }
-\newglossaryentry{API}{
+
+\newglossaryentry{syscall}{
     type=\acronymtype,
-    name={API},
-    description={Giao diện lập trình ứng dụng (Application Programming Interface)},
-    first={API}
+    name={syscall},
+    description={Lời gọi hệ thống, giao diện giữa tiến trình người dùng và nhân hệ điều hành},
+    first={lời gọi hệ thống (system call - syscall)}
 }
-\newglossaryentry{EUD}{
+
+\newglossaryentry{ebpf}{
     type=\acronymtype,
-    name={EUD},
-    description={Phát triển ứng dụng người dùng cuối(End-User Development)},
-    first={End-User Development}
+    name={eBPF},
+    description={extended Berkeley Packet Filter, cơ chế chạy chương trình kiểm tra an toàn trong nhân Linux},
+    first={extended Berkeley Packet Filter (eBPF)}
 }
-\newglossaryentry{GWT}{
+
+\newglossaryentry{bpf}{
     type=\acronymtype,
-    name={GWT},
-    description={Công cụ lập trình Javascript bằng Java của Google (Google Web Toolkit)},
-    first={Công cụ lập trình Javascript bằng Java của Google (Google Web Toolkit}
+    name={BPF},
+    description={Berkeley Packet Filter, nền tảng gốc của eBPF},
+    first={Berkeley Packet Filter (BPF)}
 }
-\newglossaryentry{HTML}{
+
+\newglossaryentry{dfa}{
     type=\acronymtype,
-    name={HTML},
-    description={Ngôn ngữ đánh dấu siêu văn bản (HyperText Markup Language)},
-    first={Dịch vụ hạ tầng (Infrastructure  as  a  Service - IaaS)}
+    name={DFA},
+    description={Automata hữu hạn đơn định (Deterministic Finite Automaton)},
+    first={automata hữu hạn đơn định (Deterministic Finite Automaton - DFA)}
+}
+
+\newglossaryentry{stide}{
+    type=\acronymtype,
+    name={STIDE},
+    description={Sequence Time-Delay Embedding, phương pháp phát hiện bất thường dựa trên chuỗi con syscall},
+    first={Sequence Time-Delay Embedding (STIDE)}
+}
+
+\newglossaryentry{rnn}{
+    type=\acronymtype,
+    name={RNN},
+    description={Mạng nơ-ron hồi quy (Recurrent Neural Network)},
+    first={mạng nơ-ron hồi quy (Recurrent Neural Network - RNN)}
+}
+
+\newglossaryentry{lstm}{
+    type=\acronymtype,
+    name={LSTM},
+    description={Long Short-Term Memory, một biến thể của mạng nơ-ron hồi quy},
+    first={Long Short-Term Memory (LSTM)}
+}
+
+\newglossaryentry{gru}{
+    type=\acronymtype,
+    name={GRU},
+    description={Gated Recurrent Unit, một biến thể gọn hơn của mạng nơ-ron hồi quy},
+    first={Gated Recurrent Unit (GRU)}
+}
+
+\newglossaryentry{xai}{
+    type=\acronymtype,
+    name={XAI},
+    description={Trí tuệ nhân tạo giải thích được (Explainable Artificial Intelligence)},
+    first={trí tuệ nhân tạo giải thích được (Explainable Artificial Intelligence - XAI)}
+}
+
+\newglossaryentry{auroc}{
+    type=\acronymtype,
+    name={AUROC},
+    description={Diện tích dưới đường cong ROC (Area Under the Receiver Operating Characteristic Curve)},
+    first={Area Under the Receiver Operating Characteristic Curve (AUROC)}
+}
+
+\newglossaryentry{f1}{
+    type=\acronymtype,
+    name={F1},
+    description={Thước đo trung hòa giữa precision và recall},
+    first={F1 score}
+}
+
+\newglossaryentry{tid}{
+    type=\acronymtype,
+    name={TID},
+    description={Định danh luồng thực thi (Thread ID)},
+    first={định danh luồng (Thread ID - TID)}
+}
+
+\newglossaryentry{cpu}{
+    type=\acronymtype,
+    name={CPU},
+    description={Bộ xử lý trung tâm (Central Processing Unit)},
+    first={Central Processing Unit (CPU)}
+}
+
+\newglossaryentry{gpu}{
+    type=\acronymtype,
+    name={GPU},
+    description={Bộ xử lý đồ họa, thường dùng để tăng tốc huấn luyện mô hình học sâu (Graphics Processing Unit)},
+    first={Graphics Processing Unit (GPU)}
+}
+
+\newglossaryentry{mitre-attack}{
+    type=\acronymtype,
+    name={MITRE ATT\&CK},
+    description={Khung tri thức mô tả chiến thuật và kỹ thuật tấn công mạng trong thực tế},
+    first={MITRE ATT\&CK}
 }

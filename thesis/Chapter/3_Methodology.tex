@@ -375,11 +375,14 @@ tương tự trạng thái ẩn của RNN \cite{ables2024eclectic}. Đây là th
 cho các quyết định chuyển trạng thái tương lai.
 
 Để đảm bảo tất cả các vector trạng thái ẩn được trích xuất đều có ngữ cảnh đầy đủ $W$
-token, chiến lược cửa sổ dày đặc với bước nhảy stride = 1 được áp dụng: với mỗi vị trí
-$t$ trong tập huấn luyện bình thường, tạo một window đầy đủ $w_t = [s_{t-W+1}, \ldots,
-s_t]$ (đệm trái bằng token đặc biệt \texttt{<PAD>}, được gán ID riêng biệt ngoài bộ từ vựng syscall thông thường, kết hợp attention mask thích hợp khi $t < W$), sau đó gọi hàm \texttt{encode($w_t$)}
-để lấy $h_t$. Cách này đảm bảo mỗi $h_t$ đại diện cho một ngữ cảnh đầy đủ và ổn định,
-tránh hiệu ứng cold-start ở đầu chuỗi khi ngữ cảnh còn quá ít token.
+token, các vector trạng thái ẩn được trích xuất từ tập dữ liệu huấn luyện bình thường. Nhằm tối ưu hóa dung lượng lưu trữ trung gian và chi phí tính toán ngoại tuyến, quá trình trích xuất này được thực hiện với một bước nhảy thưa (stride $S_{\text{extract}} > 1$) thay vì trích xuất dày đặc từng bước một. Tuy nhiên, tại thời điểm thực thi ở nhân hệ điều hành, chương trình eBPF phải giám sát và duyệt trạng thái DFA trên từng lời gọi hệ thống đơn lẻ (tương ứng với bước nhảy $S = 1$). Sự không khớp về bước nhảy này (stride mismatch) tạo ra một bài toán kỹ thuật: nếu xây dựng bảng chuyển trạng thái trực tiếp từ các trạng thái ẩn thưa, bước chuyển trạng thái sẽ nhảy qua nhiều syscall thay vì chuyển tiếp tuần tự trên từng syscall một.
+
+Để giải quyết bài toán không khớp bước nhảy này mà không làm bùng nổ không gian lưu trữ trung gian, hệ thống áp dụng cơ chế stream hai pha (two-pass streaming) trên dữ liệu huấn luyện:
+\begin{enumerate}
+  \item \textbf{Pha 1 (Gom cụm thưa):} Trích xuất các trạng thái ẩn với bước nhảy thưa $S_{\text{extract}} > 1$ để chạy thuật toán gom cụm K-Means, thu được $K$ tâm cụm đại diện cho $K$ trạng thái rời rạc của DFA.
+  \item \textbf{Pha 2 (Dựng bước chuyển dày):} Stream lại toàn bộ các chuỗi syscall với bước nhảy dày $S = 1$. Tại mỗi vị trí $t$, cửa sổ ngữ cảnh đầy đủ được đưa qua mô hình để tính toán vector trạng thái ẩn $h_t$ và chiếu ngay lập tức vào tâm cụm gần nhất để xác định trạng thái DFA tương ứng. Các bước chuyển tiếp trạng thái tuần tự giữa các thời điểm liên tiếp $\delta(A, s_{t+1}) \to B$ được tích lũy trực tiếp vào bảng đếm. Nhờ cơ chế chiếu trực tiếp này, các vector trạng thái ẩn không cần phải lưu trữ xuống đĩa, giúp tiết kiệm tối đa dung lượng bộ nhớ trung gian trong khi vẫn đảm bảo DFA được xây dựng chính xác cho bước nhảy $S = 1$.
+\end{enumerate}
+Cách tiếp cận này đảm bảo mỗi trạng thái DFA đại diện cho một ngữ cảnh đầy đủ và ổn định, đồng thời bảo toàn tính chính xác của các bước chuyển tiếp đơn bước trong nhân hệ điều hành. Các tham số cụ thể như độ dài bước nhảy thưa $S_{\text{extract}}$ và các phân tích hiệu năng liên quan sẽ được trình bày trong Chương 5.
 
 Lựa chọn vị trí token cuối cùng để lấy trạng thái ẩn cũng được so sánh với hai
 chiến lược thay thế phổ biến:
@@ -593,12 +596,12 @@ Bốn chiến lược giải quyết được đề xuất và đánh giá thự
   }
 \end{table}
 
-Chiến lược S4 (Statistical Pruning) được chọn làm ứng viên chính vì các khối lượng công
+Chiến lược S4 (Statistical Pruning) ban đầu được coi là ứng viên lý thuyết chính vì các khối lượng công
 việc máy chủ bình thường có tính lặp lại rất cao: phân phối các bước chuyển bị lệch mạnh
 với một nhánh chính (happy path) chiếm ưu thế. Các nhánh thiểu số có tần suất dưới
-$\theta$ thường là tạo vật của quá trình lượng tử hóa K-Means hơn là phản ánh sự biến
+$\theta$ thường được giả định là tạo vật của quá trình lượng tử hóa K-Means hơn là phản ánh sự biến
 đổi hành vi thực sự. Ngưỡng $\theta$ đóng vai trò siêu tham số thứ hai sau $K$; cặp
-$(\theta, K)$ được hiệu chuẩn thông qua tìm kiếm lưới trên tập kiểm định.
+$(\theta, K)$ được thiết kế để hiệu chuẩn thông qua tìm kiếm lưới trên tập kiểm định. Sự đối chiếu hiệu năng chi tiết, tỷ lệ không xác định (non-determinism rate) thực tế và lựa chọn chiến lược tối ưu cuối cùng giữa S3 và S4 sẽ được trình bày cụ thể thông qua các kết quả thực nghiệm trong Chương 5.
 
 Hình~\ref{fig:s4_pruning} minh họa nguyên lý lựa chọn ngưỡng $\theta$ dựa trên đặc
 điểm phân phối lệch của các bước chuyển trạng thái trong workload máy chủ bình thường.
@@ -724,6 +727,8 @@ BPF Map tương ứng trong kernel.
     \texttt{thread\_state} & \texttt{TID} & \texttt{current\_state\_id} \\ \hline
   \end{tabular}
 \end{table}
+
+Để tối ưu hóa hiệu năng truy xuất trong kernel space, bảng chuyển trạng thái có thể được cấu hình để biểu diễn dưới dạng một mảng hai chiều trực tiếp (Direct-indexed 2D Array) có kích thước $K \times M_{\text{syscall}}$ trong bộ nhớ eBPF thay vì sử dụng cấu trúc Hash Map băm thông thường (trong đó $M_{\text{syscall}}$ là giới hạn chỉ số lời gọi hệ thống tối đa được định nghĩa trong hệ điều hành). Thiết kế mảng hai chiều này cho phép chương trình eBPF tra cứu trạng thái tiếp theo trực tiếp bằng phép tính offset địa chỉ bộ nhớ chỉ với chi phí $O(1)$ thực sự, loại bỏ hoàn toàn các phép toán băm và truy vấn phức tạp của Hash Map. Các phân tích chi tiết về dung lượng bộ nhớ lý thuyết và hiệu năng của phương án tối ưu hóa mảng hai chiều này so với cấu hình bản đồ băm truyền thống sẽ được trình bày cụ thể trong Chương 4 và Chương 5.
 
 Sự phân tầng trạng thái — phân loại mỗi trạng thái $q_k$ thành Normal, Edge hoặc Reject
 — được xác định trong giai đoạn xuất dựa trên tần suất xuất hiện của trạng thái đó trong

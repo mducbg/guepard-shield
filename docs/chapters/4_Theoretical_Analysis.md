@@ -16,7 +16,7 @@ Không khả thi tại runtime đối với các giá trị điển hình (W=128
 
 Mỗi syscall yêu cầu:
 - 1 lần tra cứu BPF hash map cho bước chuyển (transition): O(1)
-- 1 lần tra cứu BPF hash map cho phân tầng (tier): O(1)
+- 1 lần tra cứu BPF hash map cho phân loại (category/tier): O(1)
 - 1 lần ghi vào BPF hash map cho trạng thái mới: O(1)
 
 Tổng cộng: **O(1) cho mỗi syscall**, bất kể độ dài chuỗi hay kích thước mô hình.

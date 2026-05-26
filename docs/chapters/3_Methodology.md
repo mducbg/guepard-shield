@@ -210,7 +210,7 @@ DFA hoàn thiện được xuất ra `dfa_config.json` và được nạp vào c
 | BPF Map            | Key (Khóa)             | Value (Giá trị)          |
 | ------------------ | ---------------------- | ------------------------ |
 | `transition_table` | `(state_id, token_id)` | `next_state_id`          |
-| `state_tier`       | `state_id`             | `{NORMAL, EDGE, REJECT}` |
+| `state_class`      | `state_id`             | `{NORMAL, EDGE, REJECT}` |
 | `thread_state`     | `TID`                  | `current_state_id`       |
 
 ---
@@ -226,16 +226,16 @@ Trên mỗi sự kiện syscall, chương trình eBPF:
 3. Tra cứu `next_state = transition_table[(current_state, token)]`.
 4. Nếu không tồn tại mục nhập → **Trạng thái từ chối (Rejecting State)** (bước chuyển không xác định).
 5. Ghi `next_state` vào `thread_state[TID]`.
-6. Đọc `state_tier[next_state]` và hành động tương ứng.
+6. Đọc `state_class[next_state]` và hành động tương ứng.
 
 Chi phí: hai lần tra cứu BPF map O(1) trên mỗi syscall. Không có context switch sang userspace cho các bước chuyển bình thường.
 
-### 3.5.2 Phản hồi phân tầng (Tiered Response)
+### 3.5.2 Phản hồi phân loại (Categorical Response)
 
-| Tầng                     | Tiêu chí                                                           | Hành động                                                                                   |
+| Phân loại                | Tiêu chí                                                           | Hành động                                                                                   |
 | ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| **Normal**               | Tầng của `next_state` = NORMAL                                     | Tiếp tục. Không tốn thêm chi phí ngoài việc cập nhật map.                                   |
-| **Edge (Vùng xám)**      | Tầng của `next_state` = EDGE, hoặc token là OOV (không có trong Σ) | Thu thập window, gửi tới Rust Agent → Transformer ngoại tuyến để phân tích sâu. Không chặn. |
+| **Normal**               | Trạng thái `next_state` phân loại là NORMAL                        | Tiếp tục. Không tốn thêm chi phí ngoài việc cập nhật map.                                   |
+| **Edge (Vùng xám)**      | Trạng thái `next_state` phân loại là EDGE, hoặc token là OOV (không có trong Σ) | Thu thập window, gửi tới Rust Agent → Transformer ngoại tuyến để phân tích sâu. Không chặn. |
 | **Rejecting (Tấn công)** | Không có mục nhập trong `transition_table` cho `(state, token)`    | BLOCK / KILL / ALERT.                                                                       |
 
 **Định nghĩa trạng thái Edge:** Các trạng thái có tần suất xuất hiện trong thời gian huấn luyện thấp hơn một ngưỡng phân vị (percentile threshold). Những trạng thái này đại diện cho các hành vi hiếm gặp nhưng đã từng thấy trong quá trình huấn luyện — đủ nghi ngờ để cần phân tích sâu, nhưng không chặn ngay lập tức.

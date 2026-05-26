@@ -1,12 +1,110 @@
 \documentclass[../main.tex]{subfiles}
 \begin{document}
 
-\section{Summary}
+Chương 6 tổng kết các kết quả chính của luận văn, thảo luận những hạn chế còn tồn đọng
+và đề xuất hướng phát triển tiếp theo. Nội dung chương được tổ chức theo hai phần tương
+ứng với hai câu hỏi trung tâm: đề xuất thiết kế Guepard Shield đã được kiểm chứng ở mức
+độ nào, và những điều kiện nào cần được đáp ứng để hệ thống sẵn sàng cho triển khai thực
+tế.
 
-Sinh viên nhắc lại các vấn đề mà đồ án đã giải quyết được, cũng như những vấn đề còn tồn đọng của đồ án.  
+\section{Tổng kết}
+\label{sec:conclusions_summary}
 
-\section{Suggestion for Future Works }
+Luận văn đề xuất và xây dựng Guepard Shield, một pipeline đầu-cuối cho phát hiện bất
+thường dựa trên syscall theo hướng lai giữa học sâu và thực thi nhẹ trong nhân hệ điều
+hành. Xuất phát điểm của nghiên cứu là khoảng cách thực thi chính sách bảo mật (enforcement
+gap): các mô hình Transformer có năng lực học mẫu tuần tự tốt nhưng không thể chạy trong
+đường đi syscall của kernel, trong khi các hệ thống dựa trên luật tĩnh như Falco hay
+Tetragon có chi phí thấp nhưng phụ thuộc vào tri thức chuyên gia thủ công. Guepard Shield
+lấp khoảng trống đó bằng cách tách giai đoạn học ngoại tuyến ra khỏi giai đoạn thực thi
+thời gian thực, sử dụng mô hình Transformer như Teacher để học phân phối hành vi bình
+thường, sau đó chưng cất kết quả học được thành một DFA Student đủ nhỏ để nạp vào BPF map.
 
-Sinh viên đề xuất hướng phát triển trong tương lai (nếu có) .  
+\subsection{Các kết quả đã đạt được}
+
+Luận văn xác nhận tính khả thi của pipeline qua bốn nhóm kết quả chính.
+
+\textbf{Thiết kế pipeline đầu-cuối.} Ba giai đoạn từ tiền xử lý dữ liệu (Giai đoạn 1),
+huấn luyện Transformer Teacher (Giai đoạn 2), đến chưng cất DFA Student qua K-Means (Giai
+đoạn 3) đã được xây dựng và kết nối thành một quy trình liên tục. Ranh giới rõ ràng giữa
+offline learning và online enforcement là nguyên tắc thiết kế quan trọng giúp mỗi giai đoạn
+có thể được tối ưu độc lập mà không làm ảnh hưởng đến chi phí runtime.
+
+\textbf{Transformer Teacher trên LID-DS-2021.} Mô hình Decoder-only Transformer với
+$d_{\text{model}} = 128$, 4 lớp và 4 attention heads, huấn luyện theo mục tiêu dự đoán
+token kế tiếp trên dữ liệu bình thường, đạt validation loss 0.3686 tại epoch 1 và hội tụ
+ổn định qua 7 epoch. Điểm last-token NLL đạt AUROC = 0.8503 và PR-AUC = 0.7093 trên gần
+100 triệu window kiểm thử, cho thấy mô hình có khả năng phân tách window bất thường khỏi
+hành vi bình thường ngay cả khi chỉ học từ dữ liệu không giám sát. Ở cấp độ bản ghi, 1,715
+trong 1,815 attack recordings (94.5\%) có ít nhất một window vượt ngưỡng oracle, với
+median detection lag là 14 window sau mốc khai thác.
+
+\textbf{Chưng cất DFA Student.} Cấu hình S3 Majority Voting tại $K = 64$ tạo ra bảng
+chuyển trạng thái với 64 states và 1,973 transitions, đạt tỷ lệ phát hiện cấp độ bản ghi
+$DR_{\text{rec}} = 90.85\%$, tỷ lệ báo động giả FPR = 1.41\% và fidelity 98.12\% so với
+Teacher. Kích thước bảng chuyển dưới dạng mảng trực tiếp $64 \times 816 \times 4$ bytes
+xấp xỉ 204 KB, hoàn toàn nằm trong giới hạn BPF map của các kernel Linux hiện đại.
+Phân tích đánh đổi giữa các chiến lược giải quyết tính không xác định cho thấy majority
+voting là lựa chọn khả dụng duy nhất; statistical pruning S4 thất bại ở mọi giá trị $K$
+được thử nghiệm do tỷ lệ non-determinism không đủ thấp để pruning giữ lại bảng chuyển có
+ý nghĩa.
+
+\textbf{Phân tích lý thuyết và khung đánh giá.} Chương 4 xác lập độ phức tạp $O(1)$ cho
+mỗi sự kiện syscall tại runtime, phân tích giới hạn bộ nhớ BPF map, khung đánh giá fidelity
+và đặc tính kháng mimicry attacks của DFA whitelist. Khung đánh giá này cũng làm rõ rằng
+nhiễu nhãn cấu trúc trong LID-DS-2021, nơi phần lớn tail sau khai thác vẫn mang hành vi
+bình thường, là lý do tại sao TPR cấp độ window thấp không mâu thuẫn với $DR_{\text{rec}}$
+cao: một cơ chế giám sát đúng nên chấp nhận post-exploit normal behavior thay vì cố gắng
+gắn cảnh báo cho toàn bộ phần tail được gán nhãn attack.
+
+\subsection{Các vấn đề còn tồn đọng}
+
+Bên cạnh các kết quả trên, luận văn thừa nhận một số vấn đề chưa được giải quyết đầy đủ.
+
+Thứ nhất, thực nghiệm trên miền $K \in \{128, 256, 512\}$ xác nhận
+rằng các cấu hình này không khả dụng và không phù hợp để phát triển
+tiếp. Tỷ lệ empty clusters cao tại các giá trị $K$ lớn hơn cho thấy
+không gian hidden state của Teacher có số chiều hiệu dụng thấp hơn
+đáng kể so với những giá trị $K$ đó; việc ép phân cụm vào nhiều
+cluster hơn chỉ làm tăng non-determinism và FPR mà không cải thiện
+fidelity hay $DR_{\text{rec}}$. Chiến lược S4 statistical pruning vì
+vậy cũng bị loại khỏi xem xét, vì điều kiện tiên quyết của nó là tỷ
+lệ non-determinism thấp không được đáp ứng ở bất kỳ $K$ nào được
+thử nghiệm.
+
+Thứ hai, phân tích MITRE ATT\&CK mới dừng lại ở mức khảo sát khả năng ánh xạ. Việc gắn
+nhãn các trạng thái attack trong DFA với các kỹ thuật tấn công cụ thể như leo thang đặc
+quyền hay chiếm quyền điều khiển tiến trình đòi hỏi phân tích sâu hơn về các recording
+tấn công trong LID-DS và bộ dữ liệu DongTing.
+
+Thứ ba, mô hình Teacher trong luận văn chỉ sử dụng tên syscall như đặc trưng đầu vào,
+chưa khai thác tham số syscall (như đường dẫn tệp trong \texttt{open}, địa chỉ trong
+\texttt{connect}) hay siêu dữ liệu tiến trình. Thiếu thông tin này làm giảm khả năng phân
+biệt các hành vi có cùng chuỗi syscall nhưng khác nhau về tham số.
+
+\section{Hướng phát triển trong tương lai}
+\label{sec:future_works}
+
+Dựa trên các kết quả và hạn chế đã trình bày, luận văn đề xuất hai hướng phát triển tiếp
+theo.
+
+\textbf{Mở rộng biểu diễn đầu vào bằng tham số syscall và siêu dữ liệu tiến trình.} Giới
+hạn lớn nhất của cách token hóa hiện tại là chỉ dùng tên syscall. Một hướng cải thiện
+khả thi là xây dựng từ vựng tổng hợp từ cặp (syscall, nhóm tham số), ví dụ phân biệt
+\texttt{open}/đường dẫn nội bộ với \texttt{open}/\texttt{/proc/}, hoặc bổ sung các trường
+siêu dữ liệu như UID, GID và tên tiến trình cha vào ngữ cảnh đầu vào. Cách tiếp cận này
+làm tăng kích thước từ vựng $|\Sigma|$ và có thể làm tăng không gian DFA, nhưng có thể
+cải thiện đáng kể khả năng phân biệt hành vi khai thác với hành vi bình thường có cùng
+chuỗi syscall.
+
+\textbf{Đánh giá trên bộ dữ liệu đa dạng và mở rộng ánh xạ MITRE ATT\&CK.} LID-DS-2021
+là bộ dữ liệu đánh giá chính nhưng được thu thập trong môi trường container hóa tương đối
+đồng nhất. Để đánh giá khả năng tổng quát hóa của pipeline, các thực nghiệm tiếp theo
+nên bao gồm bộ dữ liệu DongTing thu thập từ hệ thống thực tế, cũng như các kịch bản
+fileless attacks và memory exploitation không để lại dấu vết trên đĩa. Song song với đó,
+việc xây dựng ánh xạ có hệ thống giữa các trạng thái DFA bị gắn attack với các kỹ thuật
+tấn công trong ma trận MITRE ATT\&CK sẽ giúp các analyst có thêm ngữ cảnh diễn giải khi
+nhận cảnh báo từ hệ thống, thu hẹp khoảng cách giữa phát hiện bất thường tự động và hiểu
+biết về ý đồ của kẻ tấn công.
 
 \end{document}

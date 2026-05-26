@@ -2,15 +2,60 @@
 \begin{document}
 
 \begin{center}
-    \Large{\textbf{ABSTRACT}}\\
+  \Large{\textbf{TÓM TẮT NỘI DUNG}}\\
 \end{center}
 \vspace{1cm}
-Sinh viên viết tóm tắt ĐATN của mình trong mục này, với 200 đến 350 từ. Theo trình tự, các nội dung tóm tắt cần có: (i) Giới thiệu vấn đề (tại sao có vấn đề đó, hiện tại được giải quyết chưa, có những hướng tiếp cận nào, các hướng này giải quyết như thế nào, hạn chế là gì), (ii) Hướng tiếp cận sinh viên lựa chọn là gì, vì sao chọn hướng đó, (iii) Tổng quan giải pháp của sinh viên theo hướng tiếp cận đã chọn, và (iv) Đóng góp chính của ĐATN là gì, kết quả đạt được sau cùng là gì. Sinh viên cần viết thành đoạn văn, không được viết ý hoặc gạch đầu dòng.
+Các máy chủ Linux thường trở thành mục tiêu của các hành vi sau xâm
+nhập như leo thang đặc
+quyền, thiết lập kết nối ngược hay đánh cắp dữ liệu. Vì các hành vi
+này đều phải tương tác
+với nhân hệ điều hành qua lời gọi hệ thống (syscall), chuỗi syscall
+là nguồn quan sát quan
+trọng cho các hệ thống phát hiện xâm nhập trên máy chủ (HIDS). Tuy
+nhiên, các hướng tiếp
+cận hiện tại đối mặt với một khoảng cách thực thi chính sách
+(enforcement gap): các mô hình
+học sâu như Transformer có khả năng học mẫu tuần tự tốt nhưng quá
+nặng để chạy trực tiếp
+trong kernel, trong khi các công cụ luật tĩnh như Falco hay Tetragon
+có chi phí thấp nhưng
+phụ thuộc vào tri thức chuyên gia và khó bao phủ đầy đủ các biến thể tấn công.
+
+Luận văn đề xuất Guepard Shield, một hệ thống HIDS lai lấp khoảng
+trống đó bằng cách tách
+giai đoạn học biểu diễn ngoại tuyến ra khỏi giai đoạn thực thi thời
+gian thực. Hướng tiếp
+cận là chưng cất tri thức từ Transformer Teacher sang một automata
+hữu hạn đơn định (DFA)
+Student đủ nhỏ để nạp vào BPF map và truy vấn với độ phức tạp $O(1)$
+mỗi syscall. DFA vừa
+phù hợp với ràng buộc của eBPF Verifier, vừa bảo toàn tri thức ngữ
+cảnh mà Teacher đã học.
+
+Pipeline gồm bốn giai đoạn: token hóa tên syscall và tạo cửa sổ trượt
+(Giai đoạn~1),
+huấn luyện Decoder-only Transformer trên dữ liệu bình thường (Giai
+đoạn~2), rời rạc hóa
+vector trạng thái ẩn bằng K-Means để xây dựng bảng chuyển DFA (Giai
+đoạn~3), và nạp bảng
+chuyển vào BPF map để thực thi qua eBPF (Giai đoạn~4).
+
+Thực nghiệm trên LID-DS-2021 cho thấy Teacher đạt AUROC = 0.8503 và
+PR-AUC = 0.7093 trên
+gần 100 triệu window kiểm thử không dùng nhãn tấn công khi huấn
+luyện. DFA Student tại
+$K = 64$ tạo ra 64 trạng thái và 1.973 bước chuyển (~204~KB), đạt tỷ
+lệ phát hiện cấp độ
+bản ghi 90.85\%, tỷ lệ báo động giả 1.41\% và fidelity 98.12\% so với
+Teacher, xác nhận
+tính khả thi của hướng chưng cất Transformer sang DFA cho bài toán
+giám sát syscall
+thời gian thực.
 \begin{flushright}
-\begin{tabular}{@{}c@{}}
-Student\\
-\textit{(Signature and full name)}
-\end{tabular}
+  \begin{tabular}{@{}c@{}}
+    Học viên\\
+    \textit{(Signature and full name)}
+  \end{tabular}
 \end{flushright}
 
 \end{document}

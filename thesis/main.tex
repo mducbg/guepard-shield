@@ -71,7 +71,7 @@
 
 \setlength{\headheight}{15.6pt}
 
-\def \TITLE{THE MASTER THESIS}
+\def \TITLE{LUẬN VĂN THẠC SỸ}
 \def \AUTHOR{Nguyễn Minh Đức}
 
 % ===================================================
@@ -183,11 +183,11 @@ pdfauthor={\AUTHOR}}
 % \pagestyle{empty} % Header và footer rỗng
 \newpage
 \pagenumbering{gobble} % Xóa page numbering ở cuối trang
-\renewcommand*\contentsname{TABLE OF CONTENTS}
+\renewcommand*\contentsname{MỤC LỤC}
 \titlecontents{chapter}
 [0.0cm]             % left margin
 {\bfseries\vspace{0.3cm}}                  % above code
-{{\bfseries{\scshape} CHAPTER \thecontentslabel.\ }} % numbered format
+{{\bfseries{\scshape} CHƯƠNG \thecontentslabel.\ }} % numbered format
 {}         % unnumbered format
 {\titlerule*[0.3pc]{.}\contentspage}         % filler-page-format, e.g dots
 
@@ -213,37 +213,36 @@ pdfauthor={\AUTHOR}}
 
 \pagenumbering{roman}
 %Tạo danh mục hình vẽ.
-\renewcommand{\listfigurename}{LIST OF FIGURES}
+\renewcommand{\listfigurename}{DANH MỤC HÌNH VẼ}
 {\let\oldnumberline\numberline
-  \renewcommand{\numberline}{Figure~\oldnumberline}
+  \renewcommand{\numberline}{Hình~\oldnumberline}
 \listoffigures}
 % \phantomsection\addcontentsline{toc}{section}{\numberline {} DANH MỤC HÌNH VẼ}
 \newpage
 
 %Tạo danh mục bảng biểu.
-\renewcommand{\listtablename}{LIST OF TABLES}
+\renewcommand{\listtablename}{DANH MỤC BẢNG BIỂU}
 {\let\oldnumberline\numberline
-  \renewcommand{\numberline}{Table~\oldnumberline}
+  \renewcommand{\numberline}{Bảng~\oldnumberline}
 \listoftables}
 % \phantomsection\addcontentsline{toc}{section}{\numberline {} DANH
 % MỤC BẢNG BIỂU}
 
 \glsaddall
-% \renewcommand*{\glossaryname}{Danh sách thuật ngữ}
-\renewcommand*{\acronymname}{LIST OF ABBREVIATIONS}
-\renewcommand*{\entryname}{Abbreviation}
-\renewcommand*{\descriptionname}{Definition}
-\printnoidxglossary[type=\acronymtype]
+\renewcommand*{\acronymname}{DANH MỤC THUẬT NGỮ VÀ TỪ VIẾT TẮT}
+\renewcommand*{\entryname}{Thuật ngữ}
+\renewcommand*{\descriptionname}{Ý nghĩa}
+\printnoidxglossary
 % \phantomsection\addcontentsline{toc}{section}{\numberline {} DANH
 % MỤC THUẬT NGỮ VÀ TỪ VIẾT TẮT}
 
-\renewcommand\appendixname{APPENDIX}
-\renewcommand\appendixpagename{APPENDIX}
-\renewcommand\appendixtocname{APPENDIX}
+\renewcommand\appendixname{PHỤ LỤC}
+\renewcommand\appendixpagename{PHỤ LỤC}
+\renewcommand\appendixtocname{PHỤ LỤC}
 
-\renewcommand{\figurename}{Figure}
-\renewcommand{\tablename}{Table}
-\renewcommand{\chaptername}{CHAPTER}
+\renewcommand{\figurename}{Hình}
+\renewcommand{\tablename}{Bảng}
+\renewcommand{\chaptername}{CHƯƠNG}
 
 % ===================================================
 
@@ -256,38 +255,38 @@ pdfauthor={\AUTHOR}}
 %\fancyhead[LE]{\rightmark}
 \fancyfoot[RE, LO]{\thepage}
 
-\chapter{INTRODUCTION}
+\chapter{GIỚI THIỆU ĐỀ TÀI}
 \subfile{Chapter/1_Introduction} % Phần mở đầu
 
 \newpage
 %\pagestyle{fancy} % Áp dụng header và footer
-\chapter{LITERATURE REVIEW}
+\chapter{NỀN TẢNG LÝ THUYẾT}
 \subfile{Chapter/2_Literature_review}
 
 \newpage
 %\pagestyle{fancy} % Áp dụng header và footer
-\chapter{METHODOLOGY}
+\chapter{PHƯƠNG PHÁP ĐỀ XUẤT}
 \subfile{Chapter/3_Methodology}
 
 \newpage
 %\pagestyle{fancy} % Áp dụng header và footer
-\chapter{THEORETICAL ANALYSIS}
+\chapter{PHÂN TÍCH LÝ THUYẾT}
 \subfile{Chapter/4_Theoretical_analysis}
 
 \newpage
 %\pagestyle{fancy} % Áp dụng header và footer
-\chapter{NUMERICAL RESULTS}
+\chapter{THỰC NGHIỆM}
 \subfile{Chapter/5_Numerical_results}
 
 \newpage
-\chapter{CONCLUSIONS}
+\chapter{KẾT LUẬN}
 \subfile{Chapter/6_Conclusions}
 
 % ===================================================
 \newpage
-\renewcommand\bibname{REFERENCE}
+\renewcommand\bibname{TÀI LIỆU THAM KHẢO}
 \printbibliography
-\phantomsection\addcontentsline{toc}{chapter}{REFERENCE}
+\phantomsection\addcontentsline{toc}{chapter}{TÀI LIỆU THAM KHẢO}
 
 \appendixpage
 \appendix

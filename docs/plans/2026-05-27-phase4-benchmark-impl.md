@@ -13,6 +13,7 @@
 ### Task 1: Add LATENCY_HIST map to eBPF program
 
 **Files:**
+
 - Modify: `guepard-shield-ebpf/src/main.rs`
 
 The PerCpuArray avoids atomic ops — each CPU core maintains its own counter; userspace sums them. 32 buckets of 100 ns each covers 0–3200 ns (bucket 31 is overflow ≥ 3100 ns).
@@ -22,6 +23,7 @@ The PerCpuArray avoids atomic ops — each CPU core maintains its own counter; u
 In `guepard-shield-ebpf/src/main.rs`, extend the existing `use aya_ebpf::{...}` block and add the map.
 
 Change the imports from:
+
 ```rust
 use aya_ebpf::{
     helpers::bpf_get_current_pid_tgid,
@@ -30,7 +32,9 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 ```
+
 to:
+
 ```rust
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_ktime_get_ns},
@@ -41,6 +45,7 @@ use aya_ebpf::{
 ```
 
 Then add the new map after the existing three maps (after `static PROCESS_STATE`):
+
 ```rust
 // 32 buckets × 100 ns; bucket 31 = overflow (≥ 3100 ns). PerCpu avoids atomic ops.
 #[map]
@@ -50,6 +55,7 @@ static LATENCY_HIST: PerCpuArray<u64> = PerCpuArray::with_max_entries(32, 0);
 **Step 2: Wrap try_guepard_shield with timing**
 
 Replace the `guepard_shield` function:
+
 ```rust
 #[tracepoint]
 pub fn guepard_shield(ctx: TracePointContext) -> u32 {
@@ -72,29 +78,27 @@ pub fn guepard_shield(ctx: TracePointContext) -> u32 {
 ```bash
 cargo check
 ```
+
 Expected: `Finished` with zero errors. Warnings about unused imports are fine.
-
-**Step 4: Commit**
-
-```bash
-git add guepard-shield-ebpf/src/main.rs
-git commit -m "feat(ebpf): add LATENCY_HIST PerCpuArray for per-syscall latency measurement"
-```
 
 ---
 
 ### Task 2: Dump histogram and print percentiles in userspace
 
 **Files:**
+
 - Modify: `guepard-shield/src/main.rs`
 
 **Step 1: Add PerCpuArray import**
 
 In `guepard-shield/src/main.rs`, change the existing aya import line from:
+
 ```rust
 use aya::maps::Array;
 ```
+
 to:
+
 ```rust
 use aya::maps::{Array, PerCpuArray};
 ```
@@ -102,6 +106,7 @@ use aya::maps::{Array, PerCpuArray};
 **Step 2: Add histogram dump after Ctrl-C**
 
 Replace the current shutdown block:
+
 ```rust
     let ctrl_c = signal::ctrl_c();
     ctrl_c.await?;
@@ -111,6 +116,7 @@ Replace the current shutdown block:
 ```
 
 with:
+
 ```rust
     let ctrl_c = signal::ctrl_c();
     ctrl_c.await?;
@@ -135,6 +141,7 @@ with:
 **Step 3: Add the helper function**
 
 Add this function after `main()` (before the end of the file):
+
 ```rust
 fn print_latency_histogram(counts: &[u64; 32]) {
     let total: u64 = counts.iter().sum();
@@ -176,20 +183,15 @@ fn print_latency_histogram(counts: &[u64; 32]) {
 ```bash
 cargo check
 ```
+
 Expected: `Finished` with zero errors.
-
-**Step 5: Commit**
-
-```bash
-git add guepard-shield/src/main.rs
-git commit -m "feat(userspace): dump LATENCY_HIST histogram and print p50/p99/p999 on exit"
-```
 
 ---
 
 ### Task 3: Create E2 Python Transformer benchmark script
 
 **Files:**
+
 - Create: `notebooks/p4/benchmark_transformer.py`
 
 The script loads the trained checkpoint, takes 10,100 windows from `data/processed/p2/val_X.npy`, and times each `model.encode()` call individually (no batching, CPU only).
@@ -203,6 +205,7 @@ mkdir -p notebooks/p4
 **Step 2: Write the benchmark script**
 
 Create `notebooks/p4/benchmark_transformer.py`:
+
 ```python
 """E2 — Transformer CPU single-sample inference latency benchmark.
 
@@ -282,7 +285,9 @@ if __name__ == "__main__":
 ```bash
 uv run notebooks/p4/benchmark_transformer.py
 ```
+
 Expected output (values approximate):
+
 ```
 Loading model from results/p2/checkpoints/best.ckpt ...
 Loading val windows from data/processed/p2/val_X.npy ...
@@ -295,26 +300,22 @@ Benchmarking 10000 windows (single-sample, CPU, no grad) ...
   p999 :    X,XXX,XXX ns  (X.XX ms)
   mean :    X,XXX,XXX ns
 ```
+
 If import fails, verify `guepard-shield-model/` is on `sys.path` and `pyproject.toml` includes the model package.
-
-**Step 4: Commit**
-
-```bash
-git add notebooks/p4/benchmark_transformer.py
-git commit -m "feat(bench): add E2 Transformer CPU single-sample latency benchmark"
-```
 
 ---
 
 ### Task 4: Create E3 nginx config and benchmark shell script
 
 **Files:**
+
 - Create: `notebooks/p4/nginx_bench.conf`
 - Create: `notebooks/p4/run_e3.sh`
 
 **Step 1: Create nginx config**
 
 Create `notebooks/p4/nginx_bench.conf`:
+
 ```nginx
 # Minimal nginx config for E3 benchmark — serves a single static 4KB file.
 # Run as: nginx -c /absolute/path/to/nginx_bench.conf
@@ -344,6 +345,7 @@ http {
 **Step 2: Create benchmark script**
 
 Create `notebooks/p4/run_e3.sh`:
+
 ```bash
 #!/usr/bin/env bash
 # E3 — nginx live overhead benchmark
@@ -480,20 +482,15 @@ echo ""
 # Stop it
 nginx -s stop -c "$(pwd)/notebooks/p4/nginx_bench.conf"
 ```
+
 Expected: curl returns the content of bench.html without error.
-
-**Step 5: Commit**
-
-```bash
-git add notebooks/p4/nginx_bench.conf notebooks/p4/run_e3.sh
-git commit -m "feat(bench): add E3 nginx overhead benchmark script and config"
-```
 
 ---
 
 ### Task 5: Create results/p4/ directory and build release binary
 
 **Files:**
+
 - Create: `results/p4/.gitkeep`
 
 **Step 1: Create results directory**
@@ -508,14 +505,8 @@ touch results/p4/.gitkeep
 ```bash
 cargo build --release
 ```
+
 Expected: `Finished release [optimized]` — the binary lands at `target/release/guepard-shield`.
-
-**Step 3: Commit**
-
-```bash
-git add results/p4/.gitkeep
-git commit -m "chore: add results/p4/ directory for benchmark outputs"
-```
 
 ---
 
@@ -546,6 +537,7 @@ wait "$DFA_PID" 2>/dev/null || true
 ```
 
 Expected output ends with:
+
 ```
 [latency histogram] XXXXXX samples
      bucket_ns       count    cumul%
@@ -556,6 +548,7 @@ p50: 0–100 ns          ← typical DFA lookup is sub-100ns
 p99: 200–300 ns
 p999: 500–1000 ns
 ```
+
 If the histogram shows `0 samples`, verify `LATENCY_HIST` map name matches between eBPF and userspace.
 
 **Step 3: Stop nginx**
@@ -575,19 +568,23 @@ No code changes. Run experiments in order and capture output.
 ```bash
 uv run notebooks/p4/benchmark_transformer.py 2>&1 | tee results/p4/e2_transformer_latency.txt
 ```
+
 Expected: prints p50/p99/p999 latency. Takes ~5–15 minutes depending on CPU speed.
 
 **Step 2: Run E3 (nginx overhead, requires sudo)**
 
 Build release binary first if not done:
+
 ```bash
 cargo build --release
 ```
 
 Then run E3 (takes ~2.5 minutes):
+
 ```bash
 sudo bash notebooks/p4/run_e3.sh results/p3/dfa_config.json 2>&1 | tee results/p4/e3_summary.txt
 ```
+
 Expected: two sections of wrk output showing req/s, then a summary comparing cycles and throughput.
 
 **Step 3: Run E1 (eBPF histogram, 60s collection)**
@@ -605,25 +602,18 @@ wait "$DFA_PID" 2>/dev/null | tee results/p4/e1_ebpf_histogram.txt
 nginx -s stop -c "$(pwd)/notebooks/p4/nginx_bench.conf"
 ```
 
-**Step 4: Commit results**
-
-```bash
-git add results/p4/
-git commit -m "results: add Phase 4 benchmark raw output (E1/E2/E3)"
-```
-
 ---
 
 ## Quick Reference: File Map
 
-| File | Purpose |
-|------|---------|
-| `guepard-shield-ebpf/src/main.rs` | +`LATENCY_HIST` map + timing in `guepard_shield()` |
-| `guepard-shield/src/main.rs` | +histogram read + `print_latency_histogram()` |
-| `notebooks/p4/benchmark_transformer.py` | E2: CPU single-sample Transformer timing |
-| `notebooks/p4/nginx_bench.conf` | nginx config for E3 |
-| `notebooks/p4/run_e3.sh` | E3 automation: wrk + perf stat, 2 conditions |
-| `results/p4/` | Output directory for all experiment results |
+| File                                    | Purpose                                            |
+| --------------------------------------- | -------------------------------------------------- |
+| `guepard-shield-ebpf/src/main.rs`       | +`LATENCY_HIST` map + timing in `guepard_shield()` |
+| `guepard-shield/src/main.rs`            | +histogram read + `print_latency_histogram()`      |
+| `notebooks/p4/benchmark_transformer.py` | E2: CPU single-sample Transformer timing           |
+| `notebooks/p4/nginx_bench.conf`         | nginx config for E3                                |
+| `notebooks/p4/run_e3.sh`                | E3 automation: wrk + perf stat, 2 conditions       |
+| `results/p4/`                           | Output directory for all experiment results        |
 
 ## Dependency Notes
 

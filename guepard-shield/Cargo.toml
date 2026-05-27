@@ -14,9 +14,12 @@ anyhow = { workspace = true, default-features = true }
 aya = { workspace = true }
 aya-log = { workspace = true }
 bytes = { workspace = true, features = ["std"] }
+clap = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
 tokio = { workspace = true, features = [
     "macros",
     "rt",

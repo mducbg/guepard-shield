@@ -362,7 +362,147 @@ Chỉ K=64 được đánh giá đầy đủ trong phiên này. Việc chạy K=
 
 ## 5.8 Kết quả Giai đoạn 4 — Độ trễ Runtime
 
-*(Sẽ được điền.)*
+Giai đoạn 4 đánh giá chi phí vận hành của cơ chế thực thi eBPF DFA so với giả thuyết thay thế là chạy Transformer inference nội tuyến. Ba thí nghiệm độc lập được thực hiện: E1 đo latency từng syscall của eBPF DFA qua BPF timer, E2 đo latency từng window của Transformer trên CPU, E3 đo overhead throughput thực trên nginx production workload.
+
+### 5.8.1 Thiết lập thực nghiệm
+
+**Môi trường phần cứng:** Tất cả ba thí nghiệm chạy trên cùng một máy vật lý (không có ảo hóa), đảm bảo số liệu latency và overhead có thể so sánh trực tiếp.
+
+**E1 — eBPF DFA latency:**
+
+Thêm map `LATENCY_HIST: PerCpuArray<u64>` với 32 bucket, mỗi bucket rộng 100 ns (bucket 31 là overflow ≥ 3.100 ns). Trong hàm tracepoint `guepard_shield()`, hai lần gọi `bpf_ktime_get_ns()` bao quanh toàn bộ `try_guepard_shield()`:
+
+```
+t0 = bpf_ktime_get_ns()
+→ try_guepard_shield()   [SYSCALL_TO_TOKEN lookup + TRANSITION_TABLE lookup + PROCESS_STATE update]
+elapsed = bpf_ktime_get_ns() - t0
+bucket = (elapsed / 100).min(31)
+LATENCY_HIST[bucket] += 1          // per-CPU, không cần atomic
+```
+
+Dùng `PerCpuArray` thay vì `Array` để tránh atomic increment trong hot path — mỗi CPU core cộng dồn vào slot riêng, userspace tổng hợp bằng cách cộng tất cả các core khi đọc map.
+
+Hai điều kiện đo được thực hiện: (a) **standalone** — DFA monitor toàn bộ process trên hệ thống, thu thập tối thiểu 1 triệu samples; (b) **E3 embedded** — DFA chỉ monitor nginx worker process (`--target-tgid`) trong suốt 60 giây của E3, thu thập số liệu đại diện cho workload HTTP thực tế.
+
+**E2 — Transformer CPU latency:**
+
+Script `notebooks/p4/benchmark_transformer.py` load checkpoint `results/p2/checkpoints/best.ckpt`, thực hiện 100 lần warmup rồi 10.000 lần đo single-sample:
+
+```python
+model.eval().cpu()          # CPU, không GPU — phản ánh điều kiện inline enforcement
+with torch.no_grad():
+    t0 = time.perf_counter_ns()
+    model.encode(window.unsqueeze(0))   # shape [1, 64]
+    latency_ns = time.perf_counter_ns() - t0
+```
+
+Mỗi lần gọi xử lý một window độc lập (không batch) — đây là điều kiện worst-case thực tế khi cần phán quyết tức thì sau mỗi window.
+
+**E3 — nginx live overhead:**
+
+Workload: nginx 1 worker process phục vụ file tĩnh 4 KB qua HTTP/1.1.
+
+| Tham số wrk | Giá trị |
+|-------------|---------|
+| Threads | 4 |
+| Connections | 100 |
+| Duration | 60 s |
+| URL | `http://localhost:8080/` |
+
+Hai điều kiện được đo tuần tự trên cùng một nginx instance (không restart giữa hai điều kiện): **(1) Baseline** — nginx + wrk, không có eBPF; **(2) DFA attached** — cùng workload với `guepard-shield` attach tracepoint `raw_syscalls/sys_enter` và monitor nginx worker process.
+
+`perf stat` monitor PID của nginx worker process (không phải master) để đo cycles và syscall count thực tế của process xử lý HTTP. Khi eBPF đang attach vào cùng tracepoint `raw_syscalls:sys_enter`, counter `raw_syscalls:sys_enter` của perf bị conflict và trả về 0 — đây là behavior đã biết khi eBPF và perf cùng consume một tracepoint. Do đó, syscall rate được lấy từ điều kiện baseline: 38.807.804 syscalls / 60 s = **647.000 syscalls/s**.
+
+---
+
+### 5.8.2 E1 — Latency eBPF DFA
+
+**Điều kiện standalone (all-process monitoring):**
+
+| Thống kê | Giá trị |
+|----------|---------|
+| Samples | 1.189.670 |
+| p50 | **100–200 ns** |
+| p99 | 2.700–2.800 ns |
+| p999 | ≥ 3.100 ns |
+
+**Điều kiện E3 — nginx worker only (34.550.232 samples):**
+
+| bucket_ns | count | cumul% |
+|-----------|-------|--------|
+| 0 | 32.432.414 | 93,87% |
+| 100 | 2.080.646 | 99,89% |
+| 200 | 18.859 | 99,95% |
+| 300–3.000 | ~9.000 | 99,99% |
+| ≥ 3.100 | 2.563 | 100,00% |
+
+| Thống kê | Giá trị |
+|----------|---------|
+| p50 | **< 100 ns** |
+| p99 | **100–200 ns** |
+| p999 | **200–300 ns** |
+
+Phân phối latency của nginx worker nhanh hơn so với điều kiện standalone vì: (1) nginx tạo ra pattern syscall đồng đều (phần lớn là `epoll_wait`, `recvfrom`, `sendto`, `write`) nên PROCESS\_STATE HashMap chỉ có một entry duy nhất, lookup nhanh hơn; (2) DFA thường ở trạng thái ổn định — ít bị reset — nên mỗi syscall chỉ đi qua một sequence lookup đơn giản.
+
+93,87% syscalls của nginx worker hoàn thành trong dưới 100 ns. Phần đuôi (p99.9 = 200–300 ns) tương ứng với các lần hết cache hoặc scheduler preemption xảy ra giữa hai lần gọi `bpf_ktime_get_ns()`.
+
+---
+
+### 5.8.3 E2 — Latency Transformer CPU
+
+| Thống kê | Giá trị (ns) | Giá trị (ms) |
+|----------|-------------|-------------|
+| p50 | 1.843.051 | **1,84** |
+| p99 | 3.004.179 | **3,00** |
+| p999 | 3.982.026 | **3,98** |
+| mean | 1.932.963 | 1,93 |
+
+Kết quả đo được trên CPU đơn, không GPU, không batch — phản ánh điều kiện inline enforcement thực tế. Transformer cần xử lý toàn bộ attention computation qua 4 lớp với d\_model=128 cho mỗi window độc lập.
+
+---
+
+### 5.8.4 E3 — Overhead nginx Live Workload
+
+| Metric | Baseline | DFA attached | Delta |
+|--------|----------|--------------|-------|
+| Throughput (req/s) | 92.210 | 82.091 | **−10,97%** |
+| Latency p50 (ms) | 1,09 | 1,22 | +11,9% |
+| CPU cycles / 60 s (worker) | 230,7 × 10⁹ | 224,3 × 10⁹ | −2,8% |
+
+Overhead throughput là **10,97%** — cao hơn mục tiêu < 5% đặt ra trong §5.4.3. Nguyên nhân: eBPF tracepoint thực thi đồng bộ trong kernel path — mỗi syscall của nginx worker bị trễ thêm một đoạn thời gian tương đương latency DFA (<100 ns) trước khi kernel path hoàn thành. Với nginx worker đơn luồng thực hiện 647.000 syscalls/s, tổng thời gian chờ là khoảng 65 ms/s — tương đương **0,065 CPU core** cho eBPF, nhưng gây hiệu ứng serialization trên syscall entry của process đơn luồng.
+
+Cycles/60s của nginx worker giảm 2,8% trong điều kiện DFA — phản ánh thực tế worker xử lý ít request hơn (fewer HTTP transactions), không phải eBPF giảm tải cho worker. Chi phí eBPF nằm trong kernel overhead, không phản ánh vào counter process-level của worker.
+
+---
+
+### 5.8.5 So sánh tổng hợp
+
+**Giả thuyết thay thế: Transformer inline enforcement.**
+
+Nếu áp dụng Transformer trực tiếp vào enforcement path thay vì DFA:
+
+```
+Syscall rate (nginx worker):     647.000 syscalls/s
+Window size:                      64 syscalls
+Window rate:                     647.000 / 64 = 10.109 windows/s
+
+CPU cores cần thiết:             10.109 × 1,843 ms = 18,6 cores
+```
+
+Với p50 = 1,84 ms và window rate 10.109 windows/s, Transformer sẽ cần **18,6 CPU core đồng thời** chỉ để theo kịp luồng syscall của một nginx worker process. Con số này vượt hoàn toàn khả năng của bất kỳ thiết lập thực tế nào yêu cầu inline enforcement.
+
+**Bảng so sánh:**
+
+| Metric | DFA (eBPF) | Transformer (CPU) | Tỷ lệ |
+|--------|-----------|-------------------|-------|
+| p50 latency / event | **< 100 ns** | **1,84 ms** | **> 18.000×** |
+| p99 latency / event | **100–200 ns** | **3,00 ms** | **> 15.000×** |
+| CPU cores @ 647k syscalls/s | **~0,07** | **~18,6** | infeasible |
+| nginx throughput overhead | **~11%** | > 100% (infeasible) | — |
+
+**Thảo luận về overhead 11%.**
+
+Overhead 11% vượt mục tiêu < 5% nhưng cần được diễn giải trong bối cảnh thiết kế. Trong cấu hình thí nghiệm này, DFA monitor 100% syscalls của nginx worker — tức là không có sampling. Nếu áp dụng sampling 1/10 (chỉ evaluate mỗi cửa sổ thứ 10), overhead ước tính giảm xuống ~1%. Hơn nữa, overhead 11% với DFA vẫn là lựa chọn duy nhất khả thi: phương án Transformer cần 18,6 core và hoàn toàn không thể thực thi inline. Khoảng cách giữa hai phương án về mặt chi phí computational là hơn **18.000 lần** ở p50 latency — đây là luận cứ trung tâm của Giai đoạn 4.
 
 ## 5.9 Độ bao phủ MITRE ATT&CK
 

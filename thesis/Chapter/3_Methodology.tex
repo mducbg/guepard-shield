@@ -609,7 +609,7 @@ tiêu chí dự đoán
 token tiếp theo (next-token prediction) với hàm mất mát cross-entropy, theo công
 thức~(\ref{eq:loss}) đã định nghĩa ở §\ref{sec:transformer}. Đây là
 phương pháp phát
-hiện bất thường không giám sát (unsupervised anomaly detection) đã
+hiện bất thường không giám sát (unsupervised anomaly detection) \cite{pang2021deep} đã
 được áp dụng rộng rãi
 trong các hệ thống HIDS dựa trên chuỗi sự kiện
 \cite{du2017deeplog,fournier2023language}:
@@ -619,13 +619,13 @@ biểu hiện dưới dạng xác suất thấp tương ứng với điểm Nega
 Log-Likelihood cao tại
 thời điểm inference.
 
-Quá trình tối ưu hóa sử dụng AdamW với lịch trình suy giảm học suất
-cosine và giai đoạn
+Quá trình tối ưu hóa sử dụng AdamW \cite{loshchilov2019adamw} với lịch trình suy giảm học suất
+cosine \cite{loshchilov2017sgdr} và giai đoạn
 khởi động (warmup) chiếm 5\% tổng số bước huấn luyện. Kỹ thuật
-Teacher Forcing cho phép
+Teacher Forcing \cite{williams1989teacher} cho phép
 song song hóa quá trình huấn luyện trên toàn bộ chuỗi trong một
 forward pass. Độ chính
-xác hỗn hợp (AMP 16-bit mixed precision) được áp dụng để giảm thời
+xác hỗn hợp (AMP 16-bit mixed precision) \cite{micikevicius2018mixed} được áp dụng để giảm thời
 gian huấn luyện và
 bộ nhớ GPU cần thiết.
 
@@ -739,7 +739,7 @@ Nhờ cơ chế causal self-attention đã trình bày trong
 §\ref{sec:transformer}, $h_t$ mã hóa
 toàn bộ lịch sử nhân quả $(s_1, \ldots, s_t)$ trong một vector duy
 nhất, đóng vai trò
-tương tự trạng thái ẩn của RNN \cite{ables2024eclectic}. Đây là thành
+tương tự trạng thái ẩn của RNN \cite{weiss2018extracting}. Đây là thành
 phần tự nhiên nhất
 để biểu diễn trạng thái DFA, vì một trạng thái DFA theo định nghĩa hình thức ở
 §\ref{sec:dfa} cũng phải mã hóa toàn bộ thông tin từ lịch sử chuỗi
@@ -870,7 +870,7 @@ toàn bộ lịch sử $W$ token, không cần bất kỳ bước xử lý bổ 
 
 Tập hợp các vector $\{h_t\}_{t=1}^{N}$ thu được từ toàn bộ tập huấn
 luyện được áp dụng
-thuật toán gom cụm K-Means với $K$ cụm. Mỗi tâm cụm $c_k$ định nghĩa
+thuật toán gom cụm K-Means \cite{lloyd1982kmeans} với $K$ cụm. Mỗi tâm cụm $c_k$ định nghĩa
 một trạng thái
 DFA $q_k \in Q$; một vector $h$ được ánh xạ tới trạng thái $q_k$ trong đó:
 
@@ -879,7 +879,7 @@ DFA $q_k \in Q$; một vector $h$ được ánh xạ tới trạng thái $q_k$ t
   \text{cluster}(h) = \arg\min_{k \in \{1,\ldots,K\}} \|h - c_k\|_2
 \end{equation}
 
-Về mặt thuật toán, hệ thống sử dụng biến thể mini-batch của K-Means
+Về mặt thuật toán, hệ thống sử dụng biến thể mini-batch của K-Means \cite{sculley2010webscale}
 thay vì K-Means toàn
 phần, vì ma trận trạng thái ẩn có thể lớn hơn bộ nhớ RAM nếu nạp toàn
 bộ ở độ chính xác
@@ -1525,7 +1525,7 @@ thận trọng mà không làm giảm khả năng phát hiện mối đe dọa t
 Một lớp tấn công né tránh phổ biến đối với các hệ thống HIDS dựa trên
 chuỗi syscall là
 \textbf{mimicry attacks}
-\cite{forrest1996sense,grimmer2022improving}: kẻ tấn công chèn thêm các syscall
+\cite{forrest1996sense,grimmer2022improving,wagner2002mimicry}: kẻ tấn công chèn thêm các syscall
 trông có vẻ lành tính (syscall padding) vào chuỗi khai thác để kéo
 giãn tín hiệu bất
 thường qua nhiều cửa sổ, giảm điểm bất thường của từng window riêng

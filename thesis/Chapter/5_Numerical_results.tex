@@ -236,7 +236,7 @@ sử dụng xuyên suốt chương này.
 \section{Các chỉ số đánh giá}
 \label{sec:eval_metrics}
 
-Đối với Giai đoạn 2, chỉ số chính là AUROC và PR-AUC ở cấp độ window,
+Đối với Giai đoạn 2, chỉ số chính là AUROC \cite{fawcett2006auroc} và PR-AUC ở cấp độ window,
 sử dụng điểm
 bất thường là negative log-likelihood (NLL) của token cuối cùng trong
 window. AUROC
@@ -273,7 +273,7 @@ như nhãn attack. Fidelity được dùng như chỉ số phụ để đo mức
 thuận giữa quyết định
 của DFA và Teacher trên tập validation.
 
-\section{Kết quả Giai đoạn 2: Transformer Teacher}
+\section{Kết quả Giai đoạn 2: Huấn luyện Transformer Teacher}
 \label{sec:p2_results}
 
 \subsection{Cấu hình huấn luyện}
@@ -948,7 +948,7 @@ của luồng. Do đó,
 FPR 1.41\% của S3 nên được xem là một ước lượng thận trọng cho
 pipeline hiện tại.
 
-\section{Kết quả Giai đoạn 4 — Độ trễ Runtime eBPF DFA}
+\section{Kết quả Giai đoạn 4: Độ trễ Runtime eBPF DFA}
 \label{sec:p4_results}
 
 Giai đoạn 4 đánh giá chi phí vận hành của cơ chế thực thi eBPF DFA so

@@ -55,7 +55,8 @@ bảo mật (enforcement gap):
 
 \begin{enumerate}
   \item Các phương pháp phát hiện dựa trên học sâu (Deep Learning)
-    như Transformer, LSTM hoặc GRU có khả năng học quan hệ ngữ cảnh
+    như Transformer, LSTM \cite{hochreiter1997lstm} hoặc GRU
+    \cite{cho2014gru} có khả năng học quan hệ ngữ cảnh
     trong chuỗi syscall và thường đạt kết quả tốt trong các thí
     nghiệm ngoại tuyến. Tuy nhiên, các mô hình này có nhiều tham số,
     cần phép toán dấu phẩy động và có độ trễ suy luận (inference
@@ -119,7 +120,7 @@ kiện hệ thống với chi phí thấp. Tuy nhiên, tập luật của chúng
 quan là giải thích mô hình (XAI) và trích xuất luật (Rule Extraction)
 từ mạng nơ-ron, như nghiên cứu của Abou El Houda và các cộng sự
 \cite{abouelhouda2022novel} hoặc các kỹ thuật trích xuất automata từ
-RNN của Weiss và các cộng sự \cite{ables2024eclectic}. Các công trình
+RNN của Weiss và các cộng sự \cite{weiss2018extracting}. Các công trình
 này cung cấp gợi ý quan trọng cho việc chuyển tri thức từ mô hình
 học sâu sang biểu diễn rời rạc, nhưng vẫn cần được điều chỉnh cho bài
 toán syscall, kiến trúc Transformer và môi trường eBPF\@.
@@ -131,7 +132,7 @@ chi phí thấp tại runtime. Luận văn này tập trung vào một quy trìn
 hình Transformer bằng một biểu diễn trạng thái hữu hạn, từ đó đưa cơ
 chế phát hiện về dạng có thể triển khai bằng eBPF\@.
 
-\section{Mục tiêu nghiên cứu và Khung khái niệm}
+\section{Mục tiêu nghiên cứu}
 \label{sec:muc-tieu}
 
 Mục tiêu của luận văn là nghiên cứu và xây dựng \textbf{Guepard
@@ -241,7 +242,7 @@ hoặc giám sát giao thức mạng tại tầng liên kết dữ liệu.
 Cuối cùng, kết quả của luận văn cung cấp một công cụ hỗ trợ cho các
 chuyên gia phân tích an ninh (SOC Analysts) thông qua việc ánh xạ các
 cảnh báo bất thường với các kỹ thuật tấn công trong ma trận MITRE
-ATT\&CK. Điều này giúp thu hẹp khoảng cách giữa việc "phát hiện một cái
+ATT\&CK \cite{strom2018mitre}. Điều này giúp thu hẹp khoảng cách giữa việc "phát hiện một cái
 gì đó lạ" và việc "hiểu kẻ tấn công đang làm gì", từ đó đẩy nhanh quá
 trình phản ứng và xử lý sự cố.
 

@@ -1,195 +1,503 @@
 \documentclass[../main.tex]{subfiles}
 \begin{document}
 
-Chương 4 trình bày các phân tích lý thuyết chuyên sâu nhằm đánh giá các thuộc tính dự kiến của kiến trúc phát hiện xâm nhập lai Guepard Shield. Các nội dung phân tích trong chương này đóng vai trò làm khung lý thuyết định hướng cho việc thiết kế, tối ưu hóa siêu tham số và đánh giá các giới hạn về mặt toán học của hệ thống. Các lập luận lý thuyết này tập trung vào năm khía cạnh cốt lõi bao gồm: độ phức tạp tính toán ở các pha vận hành khác nhau, giới hạn dung lượng lưu trữ của bảng chuyển trạng thái trên bộ nhớ nhân hệ điều hành thông qua cơ chế eBPF, mối quan hệ giữa phân phối lời gọi hệ thống và tỷ lệ xung đột trong quá trình rời rạc hóa trạng thái ẩn, khả năng kháng cự của automata đối với các kỹ thuật tấn công bắt chước (mimicry attack), và cuối cùng là giới hạn trên của độ trung thực (fidelity) của mô hình Student so với mô hình Teacher. Cần lưu ý rằng các kết quả phân tích trong chương này đóng vai trò làm nền tảng lý thuyết và định hướng thiết kế cho hệ thống, đồng thời các mô hình phân tích lý thuyết này sẽ được đối chiếu và kiểm chứng trực tiếp với kết quả thực nghiệm từ đường ống (pipeline) chưng cất DFA đã hiện thực hóa hoàn chỉnh được trình bày trong Chương 5.
+Chương 4 trình bày các phân tích lý thuyết chuyên sâu nhằm đánh giá
+các thuộc tính dự kiến của kiến trúc phát hiện xâm nhập lai Guepard
+Shield. Các nội dung phân tích trong chương này đóng vai trò làm
+khung lý thuyết định hướng cho việc thiết kế, tối ưu hóa siêu tham số
+và đánh giá các giới hạn về mặt toán học của hệ thống. Các lập luận
+lý thuyết này tập trung vào năm khía cạnh cốt lõi bao gồm: độ phức
+tạp tính toán ở các pha vận hành khác nhau, giới hạn dung lượng lưu
+trữ của bảng chuyển trạng thái trên bộ nhớ nhân hệ điều hành thông
+qua cơ chế eBPF, mối quan hệ giữa phân phối lời gọi hệ thống và tỷ lệ
+xung đột trong quá trình rời rạc hóa trạng thái ẩn, khả năng kháng cự
+của automata đối với các kỹ thuật tấn công bắt chước (mimicry
+attack), và cuối cùng là giới hạn trên của độ trung thực (fidelity)
+của mô hình Student so với mô hình Teacher. Cần lưu ý rằng các kết
+quả phân tích trong chương này đóng vai trò làm nền tảng lý thuyết và
+định hướng thiết kế cho hệ thống, đồng thời các mô hình phân tích lý
+thuyết này sẽ được đối chiếu và kiểm chứng trực tiếp với kết quả thực
+nghiệm từ đường ống (pipeline) chưng cất DFA đã hiện thực hóa hoàn
+chỉnh được trình bày trong Chương 5.
 
-\section{Độ phức tạp tính toán (Computational Complexity)}
+\section{Độ phức tạp tính toán}
 \label{sec:computational_complexity}
 
-Một trong những động lực chính của kiến trúc Guepard Shield là giải quyết bài toán đánh đổi giữa khả năng biểu diễn ngữ cảnh mạnh mẽ của các mô hình học sâu và yêu cầu về độ trễ cực thấp trong môi trường thực thi của nhân hệ điều hành. Phần này phân tích độ phức tạp tính toán của ba thành phần chính trong hệ thống: quá trình suy luận của mô hình Transformer, quá trình duyệt automata tại thời điểm chạy (runtime), và quá trình gom cụm dữ liệu ngoại tuyến.
+Một trong những động lực chính của kiến trúc Guepard Shield là giải
+quyết bài toán đánh đổi giữa khả năng biểu diễn ngữ cảnh mạnh mẽ của
+các mô hình học sâu và yêu cầu về độ trễ cực thấp trong môi trường
+thực thi của nhân hệ điều hành. Phần này phân tích độ phức tạp tính
+toán của ba thành phần chính trong hệ thống: quá trình suy luận của
+mô hình Transformer, quá trình duyệt automata tại thời điểm chạy
+(runtime), và quá trình gom cụm dữ liệu ngoại tuyến.
 
 \subsection{Transformer Inference (Ngoại tuyến)}
 \label{subsec:transformer_inference_complexity}
 
-Mô hình học sâu đóng vai trò là Teacher trong Guepard Shield là một kiến trúc mạng Transformer Decoder-only. Trong giai đoạn suy luận (inference), khi mô hình thực hiện một lượt truyền thẳng (forward pass) trên một cửa sổ trượt gồm $W$ token đầu vào với kích thước nhúng (model dimension) là $d$ và số lượng lớp attention là $L$, độ phức tạp tính toán được xác định dựa trên hai thành phần chính của cơ chế tự chú ý (Self-Attention) và mạng truyền thẳng (Feed-Forward Network - FFN).
+Mô hình học sâu đóng vai trò là Teacher trong Guepard Shield là một
+kiến trúc mạng Transformer Decoder-only. Trong giai đoạn suy luận
+(inference), khi mô hình thực hiện một lượt truyền thẳng (forward
+pass) trên một cửa sổ trượt gồm $W$ token đầu vào với kích thước
+nhúng (model dimension) là $d$ và số lượng lớp attention là $L$, độ
+phức tạp tính toán được xác định dựa trên hai thành phần chính của cơ
+chế tự chú ý (Self-Attention) và mạng truyền thẳng (Feed-Forward Network - FFN).
 
-Đối với mỗi lớp Self-Attention, việc tính toán các ma trận Query, Key, Value yêu cầu chi phí là $\mathcal{O}(W \cdot d^2)$. Bước tính toán bản đồ chú ý (attention map) thông qua tích vô hướng của Query và Key có độ phức tạp là $\mathcal{O}(W^2 \cdot d)$, và việc nhân bản đồ chú ý này với ma trận Value yêu cầu thêm $\mathcal{O}(W^2 \cdot d)$ phép tính. Cuối cùng, tầng FFN áp dụng các phép biến đổi tuyến tính lên từng token một cách độc lập với chi phí $\mathcal{O}(W \cdot d^2)$. Do đó, tổng độ phức tạp tính toán cho một lượt truyền thẳng qua $L$ lớp được biểu diễn dưới dạng:
+Đối với mỗi lớp Self-Attention, việc tính toán các ma trận Query,
+Key, Value yêu cầu chi phí là $\mathcal{O}(W \cdot d^2)$. Bước tính
+toán bản đồ chú ý (attention map) thông qua tích vô hướng của Query
+và Key có độ phức tạp là $\mathcal{O}(W^2 \cdot d)$, và việc nhân bản
+đồ chú ý này với ma trận Value yêu cầu thêm $\mathcal{O}(W^2 \cdot
+d)$ phép tính. Cuối cùng, tầng FFN áp dụng các phép biến đổi tuyến
+tính lên từng token một cách độc lập với chi phí $\mathcal{O}(W \cdot
+d^2)$. Do đó, tổng độ phức tạp tính toán cho một lượt truyền thẳng
+qua $L$ lớp được biểu diễn dưới dạng:
 
 \begin{equation}
   \label{eq:transformer_complexity}
   \mathcal{O}\left(L \cdot W^2 \cdot d + L \cdot W \cdot d^2\right)
 \end{equation}
 
-Trong thực tế, khi chiều dài ngữ cảnh $W$ tăng lên, thành phần phi tuyến bậc hai $\mathcal{O}(L \cdot W^2 \cdot d)$ do cơ chế tính toán attention đầy đủ (dense attention) sẽ nhanh chóng trở thành nút thắt cổ chai tính toán chính. Ngay cả đối với cấu hình tham chiếu của mô hình Teacher được sử dụng trong nghiên cứu này (với kích thước cửa sổ $W = 64$, số chiều nhúng $d = 128$, và số lớp $L = 4$), số lượng phép toán dấu phẩy động (FLOPs) ước tính cho mỗi lượt truyền thẳng cũng đạt mức khoảng $6,29 \times 10^6$ phép tính. Đối với các cấu hình mô hình lớn hơn (ví dụ $W = 128$, $d = 256$, $L = 6$), con số này sẽ nhanh chóng tăng lên hàng chục triệu FLOPs cho mỗi cửa sổ trượt.
+Trong thực tế, khi chiều dài ngữ cảnh $W$ tăng lên, thành phần phi
+tuyến bậc hai $\mathcal{O}(L \cdot W^2 \cdot d)$ do cơ chế tính toán
+attention đầy đủ (dense attention) sẽ nhanh chóng trở thành nút thắt
+cổ chai tính toán chính. Ngay cả đối với cấu hình tham chiếu của mô
+hình Teacher được sử dụng trong nghiên cứu này (với kích thước cửa sổ
+$W = 64$, số chiều nhúng $d = 128$, và số lớp $L = 4$), số lượng phép
+toán dấu phẩy động (FLOPs) ước tính cho mỗi lượt truyền thẳng cũng
+đạt mức khoảng $6,29 \times 10^6$ phép tính. Đối với các cấu hình mô
+hình lớn hơn (ví dụ $W = 128$, $d = 256$, $L = 6$), con số này sẽ
+nhanh chóng tăng lên hàng chục triệu FLOPs cho mỗi cửa sổ trượt.
 
-Với năng lượng tính toán hiện tại của các bộ vi xử lý máy chủ (CPU), việc thực hiện hàng triệu FLOPs này tạo ra độ trễ suy luận dao động trong khoảng vài mili giây cho mỗi cửa sổ trượt. Trong khi đó, đường đi thực thi lời gọi hệ thống (syscall path) của nhân Linux yêu cầu các thao tác kiểm tra an ninh phải hoàn thành trong khoảng thời gian mức micro giây để tránh làm tắc nghẽn hệ thống và giảm hiệu năng chung của máy chủ. Do đó, việc chạy trực tiếp mô hình Transformer suy luận tại runtime trong không gian nhân là hoàn toàn bất khả thi.
+Với năng lượng tính toán hiện tại của các bộ vi xử lý máy chủ (CPU),
+việc thực hiện hàng triệu FLOPs này tạo ra độ trễ suy luận dao động
+trong khoảng vài mili giây cho mỗi cửa sổ trượt. Trong khi đó, đường
+đi thực thi lời gọi hệ thống (syscall path) của nhân Linux yêu cầu
+các thao tác kiểm tra an ninh phải hoàn thành trong khoảng thời gian
+mức micro giây để tránh làm tắc nghẽn hệ thống và giảm hiệu năng
+chung của máy chủ. Do đó, việc chạy trực tiếp mô hình Transformer suy
+luận tại runtime trong không gian nhân là hoàn toàn bất khả thi.
 
 \subsection{Duyệt DFA (Runtime)}
 \label{subsec:dfa_traversal_complexity}
 
-Để khắc phục hạn chế về mặt hiệu năng của mô hình học sâu, Guepard Shield chưng cất tri thức từ mô hình Teacher sang một automata hữu hạn đơn định (DFA). Tại thời điểm chạy (runtime), chương trình eBPF được gắn vào các tracepoints của syscall sẽ thực hiện việc kiểm tra chính sách bảo mật thông qua việc duyệt đồ thị trạng thái của DFA này.
+Để khắc phục hạn chế về mặt hiệu năng của mô hình học sâu, Guepard
+Shield chưng cất tri thức từ mô hình Teacher sang một automata hữu
+hạn đơn định (DFA). Tại thời điểm chạy (runtime), chương trình eBPF
+được gắn vào các tracepoints của syscall sẽ thực hiện việc kiểm tra
+chính sách bảo mật thông qua việc duyệt đồ thị trạng thái của DFA này.
 
-Đối với mỗi sự kiện lời gọi hệ thống mới được kích hoạt bởi một tiến trình, chương trình eBPF chỉ thực hiện ba thao tác cơ bản sau:
+Đối với mỗi sự kiện lời gọi hệ thống mới được kích hoạt bởi một tiến
+trình, chương trình eBPF chỉ thực hiện ba thao tác cơ bản sau:
 \begin{enumerate}
-  \item \textbf{Truy vấn bước chuyển trạng thái (State Transition Lookup):} Chương trình sử dụng mã định danh trạng thái hiện tại $q_t$ và token của syscall vừa xuất hiện $s_{t+1}$ làm khóa để tra cứu trạng thái tiếp theo $q_{t+1} = \delta(q_t, s_{t+1})$ trong bảng chuyển trạng thái DFA. Thao tác này được thực hiện thông qua cấu trúc BPF Hash Map với độ phức tạp thời gian trung bình là $\mathcal{O}(1)$.
-  \item \textbf{Truy vấn phân loại an ninh (State Anomaly Class Lookup):} Sau khi xác định được trạng thái tiếp theo $q_{t+1}$, chương trình thực hiện một lần tra cứu BPF Map khác để xác định mức độ bất thường (phân loại an ninh) của trạng thái này nhằm quyết định hành động xử lý (cho phép thực thi, gửi cảnh báo lên không gian người dùng, hoặc chặn tiến trình). Thao tác này cũng có độ phức tạp thời gian là $\mathcal{O}(1)$.
-  \item \textbf{Cập nhật trạng thái hiện tại (State Writeback):} Cuối cùng, trạng thái mới $q_{t+1}$ được ghi đè vào BPF Map quản lý trạng thái hiện tại của luồng tiến trình (được định danh bởi Thread ID - TID) để chuẩn bị cho syscall tiếp theo. Chi phí cho thao tác ghi này là $\mathcal{O}(1)$.
+  \item \textbf{Truy vấn bước chuyển trạng thái (State Transition
+    Lookup):} Chương trình sử dụng mã định danh trạng thái hiện tại
+    $q_t$ và token của syscall vừa xuất hiện $s_{t+1}$ làm khóa để
+    tra cứu trạng thái tiếp theo $q_{t+1} = \delta(q_t, s_{t+1})$
+    trong bảng chuyển trạng thái DFA. Thao tác này được thực hiện
+    thông qua cấu trúc BPF Hash Map với độ phức tạp thời gian trung
+    bình là $\mathcal{O}(1)$.
+  \item \textbf{Truy vấn phân loại an ninh (State Anomaly Class
+    Lookup):} Sau khi xác định được trạng thái tiếp theo $q_{t+1}$,
+    chương trình thực hiện một lần tra cứu BPF Map khác để xác định
+    mức độ bất thường (phân loại an ninh) của trạng thái này nhằm
+    quyết định hành động xử lý (cho phép thực thi, gửi cảnh báo lên
+    không gian người dùng, hoặc chặn tiến trình). Thao tác này cũng
+    có độ phức tạp thời gian là $\mathcal{O}(1)$.
+  \item \textbf{Cập nhật trạng thái hiện tại (State Writeback):} Cuối
+    cùng, trạng thái mới $q_{t+1}$ được ghi đè vào BPF Map quản lý
+    trạng thái hiện tại của luồng tiến trình (được định danh bởi
+    Thread ID - TID) để chuẩn bị cho syscall tiếp theo. Chi phí cho
+    thao tác ghi này là $\mathcal{O}(1)$.
 \end{enumerate}
 
-Tổng hợp lại, tổng độ phức tạp tính toán tại runtime cho mỗi lời gọi hệ thống là:
+Tổng hợp lại, tổng độ phức tạp tính toán tại runtime cho mỗi lời gọi
+hệ thống là:
 
 \begin{equation}
   \label{eq:dfa_runtime_complexity}
   \mathcal{O}(1)
 \end{equation}
 
-Độ phức tạp $\mathcal{O}(1)$ này hoàn toàn độc lập với chiều dài cửa sổ ngữ cảnh $W$ cũng như các siêu tham số cấu trúc $L$ và $d$ của mô hình Transformer Teacher. Điều này đảm bảo rằng độ trễ thực thi tại thời điểm chạy cực kỳ nhỏ và ổn định, đáp ứng hoàn hảo các ràng buộc khắt khe về thời gian thực của nhân hệ điều hành Linux.
+Độ phức tạp $\mathcal{O}(1)$ này hoàn toàn độc lập với chiều dài cửa
+sổ ngữ cảnh $W$ cũng như các siêu tham số cấu trúc $L$ và $d$ của mô
+hình Transformer Teacher. Điều này đảm bảo rằng độ trễ thực thi tại
+thời điểm chạy cực kỳ nhỏ và ổn định, đáp ứng hoàn hảo các ràng buộc
+khắt khe về thời gian thực của nhân hệ điều hành Linux.
 
-Về mặt quyết định an ninh, kết quả của một bước duyệt DFA không phải là một nhãn học
-máy ba lớp được dự đoán trực tiếp. Nó được xác định bởi cấu trúc của bảng chuyển và lớp
-tần suất của trạng thái đích. Nếu tồn tại bước chuyển $\delta(q_t,s_{t+1})=q_{t+1}$ và
-$q_{t+1}$ thuộc lớp tần suất bình thường, sự kiện được phân loại là \textbf{normal}. Nếu
-bước chuyển tồn tại nhưng $q_{t+1}$ thuộc nhóm trạng thái hiếm đã từng xuất hiện trong
-tập huấn luyện, sự kiện được phân loại là \textbf{suspect} và được chuyển lên user space
-để Teacher hoặc Rust Agent kiểm tra sâu hơn. Nếu không tồn tại bước chuyển cho cặp
-$(q_t,s_{t+1})$, hệ thống phân loại sự kiện là \textbf{attack}. Do đó, attack là bất
-thường cấu trúc của automata, còn suspect là vùng biên tần suất thấp của hành vi đã quan
+Về mặt quyết định an ninh, kết quả của một bước duyệt DFA không phải
+là một nhãn học
+máy ba lớp được dự đoán trực tiếp. Nó được xác định bởi cấu trúc của
+bảng chuyển và lớp
+tần suất của trạng thái đích. Nếu tồn tại bước chuyển
+$\delta(q_t,s_{t+1})=q_{t+1}$ và
+$q_{t+1}$ thuộc lớp tần suất bình thường, sự kiện được phân loại là
+\textbf{normal}. Nếu
+bước chuyển tồn tại nhưng $q_{t+1}$ thuộc nhóm trạng thái hiếm đã
+từng xuất hiện trong
+tập huấn luyện, sự kiện được phân loại là \textbf{suspect} và được
+chuyển lên user space
+để Teacher hoặc Rust Agent kiểm tra sâu hơn. Nếu không tồn tại bước
+chuyển cho cặp
+$(q_t,s_{t+1})$, hệ thống phân loại sự kiện là \textbf{attack}. Do
+đó, attack là bất
+thường cấu trúc của automata, còn suspect là vùng biên tần suất thấp
+của hành vi đã quan
 sát được.
 
 \subsection{Trích xuất K-Means (Ngoại tuyến)}
 \label{subsec:kmeans_extraction_complexity}
 
-Mặc dù việc thực thi tại runtime có chi phí tối ưu, quá trình xây dựng DFA từ mô hình Transformer yêu cầu các bước tính toán ngoại tuyến (offline) ở không gian người dùng. Quá trình này bao gồm hai bước chính: trích xuất các vector ẩn và huấn luyện thuật toán gom cụm K-Means.
+Mặc dù việc thực thi tại runtime có chi phí tối ưu, quá trình xây
+dựng DFA từ mô hình Transformer yêu cầu các bước tính toán ngoại
+tuyến (offline) ở không gian người dùng. Quá trình này bao gồm hai
+bước chính: trích xuất các vector ẩn và huấn luyện thuật toán gom cụm K-Means.
 
-Bước thứ nhất là thu thập các trạng thái ẩn (hidden states) từ mô hình Transformer. Đối với một tập dữ liệu huấn luyện gồm $N$ cửa sổ trượt, mô hình Teacher cần thực hiện một lượt truyền thẳng trên toàn bộ tập dữ liệu này để trích xuất các vector biểu diễn tại lớp attention cuối cùng. Độ phức tạp tính toán của bước này là $\mathcal{O}(N \cdot L \cdot W^2 \cdot d)$.
+Bước thứ nhất là thu thập các trạng thái ẩn (hidden states) từ mô
+hình Transformer. Đối với một tập dữ liệu huấn luyện gồm $N$ cửa sổ
+trượt, mô hình Teacher cần thực hiện một lượt truyền thẳng trên toàn
+bộ tập dữ liệu này để trích xuất các vector biểu diễn tại lớp
+attention cuối cùng. Độ phức tạp tính toán của bước này là
+$\mathcal{O}(N \cdot L \cdot W^2 \cdot d)$.
 
-Bước thứ hai là áp dụng thuật toán K-Means để rời rạc hóa không gian vector liên tục này thành $K$ cụm, tương ứng với $K$ trạng thái của DFA. Trong mỗi vòng lặp của thuật toán K-Means, khoảng cách từ $N$ mẫu dữ liệu đến $K$ tâm cụm trong không gian $d$ chiều cần được tính toán, dẫn đến độ phức tạp cho mỗi vòng lặp là $\mathcal{O}(N \cdot K \cdot d)$. Nếu thuật toán hội tụ sau $I$ lần lặp, tổng chi phí tính toán cho quá trình gom cụm là $\mathcal{O}(N \cdot K \cdot d \cdot I)$.
+Bước thứ hai là áp dụng thuật toán K-Means để rời rạc hóa không gian
+vector liên tục này thành $K$ cụm, tương ứng với $K$ trạng thái của
+DFA. Trong mỗi vòng lặp của thuật toán K-Means, khoảng cách từ $N$
+mẫu dữ liệu đến $K$ tâm cụm trong không gian $d$ chiều cần được tính
+toán, dẫn đến độ phức tạp cho mỗi vòng lặp là $\mathcal{O}(N \cdot K
+\cdot d)$. Nếu thuật toán hội tụ sau $I$ lần lặp, tổng chi phí tính
+toán cho quá trình gom cụm là $\mathcal{O}(N \cdot K \cdot d \cdot I)$.
 
-Do đó, tổng độ phức tạp tính toán ngoại tuyến của quá trình trích xuất DFA được biểu diễn bởi:
+Do đó, tổng độ phức tạp tính toán ngoại tuyến của quá trình trích
+xuất DFA được biểu diễn bởi:
 
 \begin{equation}
   \label{eq:offline_extraction_complexity}
-  \mathcal{O}\left(N \cdot L \cdot W^2 \cdot d + N \cdot K \cdot d \cdot I\right)
+  \mathcal{O}\left(N \cdot L \cdot W^2 \cdot d + N \cdot K \cdot d
+  \cdot I\right)
 \end{equation}
 
-Một khía cạnh quan trọng khác là độ phức tạp không gian lưu trữ trung gian. Nếu trích xuất toàn bộ các trạng thái ẩn một cách dày đặc ở bước nhảy $S = 1$ để phục vụ cho cả gom cụm và xây dựng bước chuyển, dung lượng đĩa cần thiết sẽ là $\mathcal{O}(N_{\text{dense}} \cdot d)$, điều này gây ra bùng nổ dung lượng lưu trữ trên đĩa cứng đối với các tập dữ liệu lớn. Để giải quyết nút thắt này, hệ thống áp dụng cơ chế trích xuất hai pha (two-pass streaming): pha gom cụm sử dụng bước nhảy thưa $S_{\text{extract}} > 1$ giúp giảm độ phức tạp không gian lưu trữ xuống $\mathcal{O}(N_{\text{sparse}} \cdot d)$ (với $N_{\text{sparse}} = N_{\text{dense}} / S_{\text{extract}}$), và pha xây dựng bước chuyển thực hiện stream trực tiếp dữ liệu với bước nhảy $S=1$ để ánh xạ on-the-fly sang các tâm cụm đã biết. Phương pháp này giảm độ phức tạp lưu trữ trung gian thực tế khi dựng bảng chuyển trạng thái về mức $\mathcal{O}(K \cdot d)$ cho các tâm cụm và $\mathcal{O}(|E|)$ cho bảng đếm chuyển tiếp, thay vì phải lưu toàn bộ $N_{\text{dense}}$ vector ẩn. Sau khi export, dung lượng bảng chuyển bị chặn trên bởi $\mathcal{O}(K \cdot |\Sigma|)$, giúp tối ưu hóa đáng kể tài nguyên I/O ngoại tuyến.
+Một khía cạnh quan trọng khác là độ phức tạp không gian lưu trữ trung
+gian. Nếu trích xuất toàn bộ các trạng thái ẩn một cách dày đặc ở
+bước nhảy $S = 1$ để phục vụ cho cả gom cụm và xây dựng bước chuyển,
+dung lượng đĩa cần thiết sẽ là $\mathcal{O}(N_{\text{dense}} \cdot
+d)$, điều này gây ra bùng nổ dung lượng lưu trữ trên đĩa cứng đối với
+các tập dữ liệu lớn. Để giải quyết nút thắt này, hệ thống áp dụng cơ
+chế trích xuất hai pha (two-pass streaming): pha gom cụm sử dụng bước
+nhảy thưa $S_{\text{extract}} > 1$ giúp giảm độ phức tạp không gian
+lưu trữ xuống $\mathcal{O}(N_{\text{sparse}} \cdot d)$ (với
+$N_{\text{sparse}} = N_{\text{dense}} / S_{\text{extract}}$), và pha
+xây dựng bước chuyển thực hiện stream trực tiếp dữ liệu với bước nhảy
+$S=1$ để ánh xạ on-the-fly sang các tâm cụm đã biết. Phương pháp này
+giảm độ phức tạp lưu trữ trung gian thực tế khi dựng bảng chuyển
+trạng thái về mức $\mathcal{O}(K \cdot d)$ cho các tâm cụm và
+$\mathcal{O}(|E|)$ cho bảng đếm chuyển tiếp, thay vì phải lưu toàn bộ
+$N_{\text{dense}}$ vector ẩn. Sau khi export, dung lượng bảng chuyển
+bị chặn trên bởi $\mathcal{O}(K \cdot |\Sigma|)$, giúp tối ưu hóa
+đáng kể tài nguyên I/O ngoại tuyến.
 
-Khi sử dụng biến thể mini-batch của K-Means, độ phức tạp trên không còn phụ thuộc vào
-việc tất cả $N$ vector phải cùng nằm trong RAM. Nếu mỗi lần cập nhật chỉ đọc một batch
+Khi sử dụng biến thể mini-batch của K-Means, độ phức tạp trên không
+còn phụ thuộc vào
+việc tất cả $N$ vector phải cùng nằm trong RAM. Nếu mỗi lần cập nhật
+chỉ đọc một batch
 kích thước $B$, bộ nhớ làm việc của bước gom cụm xấp xỉ
-$\mathcal{O}(B \cdot d + K \cdot d)$, gồm batch hiện tại và các tâm cụm. Sau khi hội tụ,
-bước gán nhãn cũng có thể thực hiện theo chunk: mỗi vector ẩn được ánh xạ vào tâm cụm
-gần nhất, nhãn cụm được ghi tuần tự ra bộ lưu trữ trung gian, còn tâm cụm được giữ lại
-để phục vụ pha stream stride-1. Đây là lý do pipeline có thể huấn luyện K-Means từ
-hidden states của Transformer trên tập lớn mà không cần giữ toàn bộ ma trận hidden state
+$\mathcal{O}(B \cdot d + K \cdot d)$, gồm batch hiện tại và các tâm
+cụm. Sau khi hội tụ,
+bước gán nhãn cũng có thể thực hiện theo chunk: mỗi vector ẩn được
+ánh xạ vào tâm cụm
+gần nhất, nhãn cụm được ghi tuần tự ra bộ lưu trữ trung gian, còn tâm
+cụm được giữ lại
+để phục vụ pha stream stride-1. Đây là lý do pipeline có thể huấn
+luyện K-Means từ
+hidden states của Transformer trên tập lớn mà không cần giữ toàn bộ
+ma trận hidden state
 ở độ chính xác tính toán đầy đủ trong bộ nhớ.
 
-Vì toàn bộ quá trình này được thực hiện ngoại tuyến tại không gian người dùng và chỉ cần chạy một lần duy nhất trong pha tiền xử lý và huấn luyện thiết lập hệ thống, chi phí tính toán này không ảnh hưởng đến hiệu năng vận hành trực tuyến của máy chủ.
+Vì toàn bộ quá trình này được thực hiện ngoại tuyến tại không gian
+người dùng và chỉ cần chạy một lần duy nhất trong pha tiền xử lý và
+huấn luyện thiết lập hệ thống, chi phí tính toán này không ảnh hưởng
+đến hiệu năng vận hành trực tuyến của máy chủ.
 
-\section{Kích thước DFA và Bộ nhớ eBPF (DFA Size and eBPF Memory)}
+\section{Kích thước DFA và Bộ nhớ eBPF}
 \label{sec:dfa_size_ebpf_memory}
 
-Một trong những ràng buộc kỹ thuật lớn nhất khi triển khai các giải pháp an ninh trong nhân Linux thông qua eBPF là giới hạn về dung lượng bộ nhớ. Tuy nhiên, trong thực tế vận hành, bảng chuyển trạng thái DFA có tính chất thưa thớt (sparsity) cực kỳ cao. Phân phối các lời gọi hệ thống của một chương trình máy chủ thông thường chỉ tập trung vào một tập con rất nhỏ của $\Sigma$, và các chuỗi chuyển dịch trạng thái hợp lệ chỉ chiếm một phần rất nhỏ trong không gian tích bộ đôi $Q \times \Sigma$. Nếu sử dụng cấu trúc Hash Map (\texttt{BPF\_MAP\_TYPE\_HASH}), các cặp trạng thái và token không xuất hiện trong dữ liệu huấn luyện bình thường sẽ không được điền vào bản đồ. Khi chương trình eBPF tra cứu một cặp không tồn tại, cơ chế mặc định sẽ coi đó là một bước chuyển sang trạng thái tấn công (attack state) hoặc kích hoạt cảnh báo bất thường. Do đó, số lượng mục nhập thực tế cần lưu trữ trong Hash Map nhỏ hơn rất nhiều so với giới hạn lý thuyết, giúp tiết kiệm bộ nhớ.
+Một trong những ràng buộc kỹ thuật lớn nhất khi triển khai các giải
+pháp an ninh trong nhân Linux thông qua eBPF là giới hạn về dung
+lượng bộ nhớ. Tuy nhiên, trong thực tế vận hành, bảng chuyển trạng
+thái DFA có tính chất thưa thớt (sparsity) cực kỳ cao. Phân phối các
+lời gọi hệ thống của một chương trình máy chủ thông thường chỉ tập
+trung vào một tập con rất nhỏ của $\Sigma$, và các chuỗi chuyển dịch
+trạng thái hợp lệ chỉ chiếm một phần rất nhỏ trong không gian tích bộ
+đôi $Q \times \Sigma$. Nếu sử dụng cấu trúc Hash Map
+(\texttt{BPF\_MAP\_TYPE\_HASH}), các cặp trạng thái và token không
+xuất hiện trong dữ liệu huấn luyện bình thường sẽ không được điền vào
+bản đồ. Khi chương trình eBPF tra cứu một cặp không tồn tại, cơ chế
+mặc định sẽ coi đó là một bước chuyển sang trạng thái tấn công
+(attack state) hoặc kích hoạt cảnh báo bất thường. Do đó, số lượng
+mục nhập thực tế cần lưu trữ trong Hash Map nhỏ hơn rất nhiều so với
+giới hạn lý thuyết, giúp tiết kiệm bộ nhớ.
 
-Mặc dù Hash Map tiết kiệm bộ nhớ nhờ tính thưa thớt, phương án thay thế tối ưu hơn về mặt tốc độ truy xuất là cấu trúc mảng hai chiều trực tiếp (Direct-indexed 2D Array) sử dụng \texttt{BPF\_MAP\_TYPE\_ARRAY} kích thước $K \times M_{\text{syscall}}$, trong đó mỗi phần tử lưu trữ chỉ số trạng thái tiếp theo dưới dạng số nguyên 4 bytes (\texttt{u32} hoặc \texttt{s32}). Dung lượng bộ nhớ lý thuyết cần thiết cho mảng trực tiếp này được xác định bởi:
+Mặc dù Hash Map tiết kiệm bộ nhớ nhờ tính thưa thớt, phương án thay
+thế tối ưu hơn về mặt tốc độ truy xuất là cấu trúc mảng hai chiều
+trực tiếp (Direct-indexed 2D Array) sử dụng
+\texttt{BPF\_MAP\_TYPE\_ARRAY} kích thước $K \times
+M_{\text{syscall}}$, trong đó mỗi phần tử lưu trữ chỉ số trạng thái
+tiếp theo dưới dạng số nguyên 4 bytes (\texttt{u32} hoặc
+\texttt{s32}). Dung lượng bộ nhớ lý thuyết cần thiết cho mảng trực
+tiếp này được xác định bởi:
 
 \begin{equation}
   \label{eq:memory_direct_array}
-  \text{Memory}_{\text{Array}} = K \times M_{\text{syscall}} \times 4 \text{ bytes}
+  \text{Memory}_{\text{Array}} = K \times M_{\text{syscall}} \times 4
+  \text{ bytes}
 \end{equation}
 
-Với $M_{\text{syscall}}$ là giới hạn chỉ số lời gọi hệ thống trong nhân hệ điều hành. Ngay cả đối với các cấu hình lý thuyết lớn (ví dụ $K = 512$ và $M_{\text{syscall}} \approx 470$), dung lượng bộ nhớ cần thiết chỉ vào khoảng $940$ KB, hoàn toàn nằm trong giới hạn phân bổ tài nguyên của eBPF Map. Đối với các cấu hình nhỏ hơn, mức tiêu thụ bộ nhớ sẽ giảm tỷ lệ thuận và chỉ chiếm một vài trăm kilobytes. Ưu điểm vượt trội của phương án mảng trực tiếp là loại bỏ hoàn toàn chi phí tính toán hash và xung đột khóa của Hash Map, chuyển đổi thao tác kiểm tra an ninh thành một phép tính offset địa chỉ tuyến tính đơn giản với độ trễ tối thiểu và độ phức tạp truy xuất $O(1)$ thực sự. Các đánh giá so sánh hiệu năng chi tiết và số liệu thực nghiệm liên quan giữa hai cấu trúc này sẽ được phân tích sâu hơn trong Chương 5.
+Với $M_{\text{syscall}}$ là giới hạn chỉ số lời gọi hệ thống trong
+nhân hệ điều hành. Ngay cả đối với các cấu hình lý thuyết lớn (ví dụ
+$K = 512$ và $M_{\text{syscall}} \approx 470$), dung lượng bộ nhớ cần
+thiết chỉ vào khoảng $940$ KB, hoàn toàn nằm trong giới hạn phân bổ
+tài nguyên của eBPF Map. Đối với các cấu hình nhỏ hơn, mức tiêu thụ
+bộ nhớ sẽ giảm tỷ lệ thuận và chỉ chiếm một vài trăm kilobytes. Ưu
+điểm vượt trội của phương án mảng trực tiếp là loại bỏ hoàn toàn chi
+phí tính toán hash và xung đột khóa của Hash Map, chuyển đổi thao tác
+kiểm tra an ninh thành một phép tính offset địa chỉ tuyến tính đơn
+giản với độ trễ tối thiểu và độ phức tạp truy xuất $O(1)$ thực sự.
+Các đánh giá so sánh hiệu năng chi tiết và số liệu thực nghiệm liên
+quan giữa hai cấu trúc này sẽ được phân tích sâu hơn trong Chương 5.
 
-Bảng chuyển trạng thái của một DFA với tập trạng thái $Q$ (kích thước $|Q| = K$) và bảng chữ cái đầu vào $\Sigma$ (kích thước $|\Sigma|$) được mô tả dưới dạng một hàm số $\delta: Q \times \Sigma \to Q$. Trong trường hợp xấu nhất sử dụng cấu trúc Hash Map, số lượng mục nhập (entries) tối đa cần lưu trữ trong bảng chuyển trạng thái là:
+Bảng chuyển trạng thái của một DFA với tập trạng thái $Q$ (kích thước
+$|Q| = K$) và bảng chữ cái đầu vào $\Sigma$ (kích thước $|\Sigma|$)
+được mô tả dưới dạng một hàm số $\delta: Q \times \Sigma \to Q$.
+Trong trường hợp xấu nhất sử dụng cấu trúc Hash Map, số lượng mục
+nhập (entries) tối đa cần lưu trữ trong bảng chuyển trạng thái là:
 
 \begin{equation}
   \label{eq:max_entries}
   N_{\text{max}} = K \times |\Sigma|
 \end{equation}
 
-Với cấu hình tham chiếu của hệ thống gồm kích thước bộ từ vựng $|\Sigma| = 470$ và số lượng trạng thái DFA tối đa $K = 512$, số lượng mục nhập tối đa trong bảng chuyển băm là $240.640$ mục nhập. Khóa (key) của bản đồ cần lưu trữ cặp trạng thái hiện tại và token đầu vào có kích thước 8 bytes (sử dụng kiểu \texttt{u32} cho mỗi trường), còn giá trị (value) lưu trữ trạng thái tiếp theo có kích thước 4 bytes (\texttt{u32}). Tổng dung lượng bộ nhớ lý thuyết cần thiết để lưu trữ toàn bộ bảng chuyển trong trường hợp xấu nhất của Hash Map ước tính khoảng $240.640 \times 12 \text{ bytes} \approx 2,89$ MB. Đây là dung lượng rất nhỏ và nằm hoàn toàn trong giới hạn cho phép của nhân Linux, đặc biệt khi cơ chế băm chỉ lưu các bước chuyển thưa thực sự xuất hiện trong dữ liệu huấn luyện. Tuy nhiên, mảng hai chiều trực tiếp (\texttt{BPF\_MAP\_TYPE\_ARRAY}) cho phép nâng hiệu năng lên tối đa nhờ truy cập bộ nhớ trực tiếp $O(1)$ mà không cần tính toán hash, với dung lượng bộ nhớ tăng lên không đáng kể và hoàn toàn nằm dưới giới hạn tài nguyên của eBPF Map. Các so sánh chi tiết và số liệu thực nghiệm liên quan sẽ được trình bày cụ thể trong Chương 5.
+Với cấu hình tham chiếu của hệ thống gồm kích thước bộ từ vựng
+$|\Sigma| = 470$ và số lượng trạng thái DFA tối đa $K = 512$, số
+lượng mục nhập tối đa trong bảng chuyển băm là $240.640$ mục nhập.
+Khóa (key) của bản đồ cần lưu trữ cặp trạng thái hiện tại và token
+đầu vào có kích thước 8 bytes (sử dụng kiểu \texttt{u32} cho mỗi
+trường), còn giá trị (value) lưu trữ trạng thái tiếp theo có kích
+thước 4 bytes (\texttt{u32}). Tổng dung lượng bộ nhớ lý thuyết cần
+thiết để lưu trữ toàn bộ bảng chuyển trong trường hợp xấu nhất của
+Hash Map ước tính khoảng $240.640 \times 12 \text{ bytes} \approx
+2,89$ MB. Đây là dung lượng rất nhỏ và nằm hoàn toàn trong giới hạn
+cho phép của nhân Linux, đặc biệt khi cơ chế băm chỉ lưu các bước
+chuyển thưa thực sự xuất hiện trong dữ liệu huấn luyện. Tuy nhiên,
+mảng hai chiều trực tiếp (\texttt{BPF\_MAP\_TYPE\_ARRAY}) cho phép
+nâng hiệu năng lên tối đa nhờ truy cập bộ nhớ trực tiếp $O(1)$ mà
+không cần tính toán hash, với dung lượng bộ nhớ tăng lên không đáng
+kể và hoàn toàn nằm dưới giới hạn tài nguyên của eBPF Map. Các so
+sánh chi tiết và số liệu thực nghiệm liên quan sẽ được trình bày cụ
+thể trong Chương 5.
 
-Cấu hình runtime của DFA là một biểu diễn phẳng của automata. Về mặt lý thuyết, nó gồm
+Cấu hình runtime của DFA là một biểu diễn phẳng của automata. Về mặt
+lý thuyết, nó gồm
 bốn thành phần chính: trạng thái bắt đầu $q_0$, bảng chuyển $T[q,s]$, ánh xạ
 syscall-to-token, và hàm lớp trạng thái $C(q)$. Trong biểu diễn mảng trực tiếp,
-$T[q,s] = -1$ được dùng để biểu diễn $\delta(q,s)$ không xác định. Hàm $C(q)$ chỉ cần
+$T[q,s] = -1$ được dùng để biểu diễn $\delta(q,s)$ không xác định.
+Hàm $C(q)$ chỉ cần
 mã hóa hai lớp hữu hạn là normal và suspect; lớp attack được suy ra từ
-$T[q,s] = -1$. Tách riêng hai cơ chế này có lợi cho triển khai eBPF vì tra cứu bước
-chuyển và tra cứu lớp trạng thái đều là phép đọc mảng hằng thời gian, đồng thời tránh
+$T[q,s] = -1$. Tách riêng hai cơ chế này có lợi cho triển khai eBPF
+vì tra cứu bước
+chuyển và tra cứu lớp trạng thái đều là phép đọc mảng hằng thời gian,
+đồng thời tránh
 phải thêm một trạng thái attack nhân tạo vào không gian cụm K-Means.
 
-\section{Tỷ lệ không xác định và Lựa chọn chiến lược (Conflict Rate and Policy Selection)}
+\section{Tỷ lệ không xác định và Lựa chọn chiến lược}
 \label{sec:conflict_rate_policy}
 
-Quá trình rời rạc hóa không gian trạng thái ẩn liên tục của Transformer thành các trạng thái DFA rời rạc thông qua gom cụm K-Means có thể dẫn đến hiện tượng không đơn định (non-determinism). Hiện tượng này xảy ra khi các cửa sổ ngữ cảnh khác nhau được ánh xạ vào cùng một cụm (trạng thái DFA) nhưng lại chuyển sang các cụm khác nhau khi quan sát cùng một syscall tiếp theo. Để kiểm soát hiện tượng này, phần này định nghĩa chỉ số tỷ lệ xung đột và phân tích tác động của siêu tham số.
+Quá trình rời rạc hóa không gian trạng thái ẩn liên tục của
+Transformer thành các trạng thái DFA rời rạc thông qua gom cụm
+K-Means có thể dẫn đến hiện tượng không đơn định (non-determinism).
+Hiện tượng này xảy ra khi các cửa sổ ngữ cảnh khác nhau được ánh xạ
+vào cùng một cụm (trạng thái DFA) nhưng lại chuyển sang các cụm khác
+nhau khi quan sát cùng một syscall tiếp theo. Để kiểm soát hiện tượng
+này, phần này định nghĩa chỉ số tỷ lệ xung đột và phân tích tác động
+của siêu tham số.
 
-Định nghĩa \textbf{tỷ lệ xung đột (conflict rate)} của quá trình trích xuất DFA từ dữ liệu huấn luyện được hình thức hóa như sau:
+Định nghĩa \textbf{tỷ lệ xung đột (conflict rate)} của quá trình
+trích xuất DFA từ dữ liệu huấn luyện được hình thức hóa như sau:
 
 \begin{equation}
   \label{eq:conflict_rate}
-  \text{conflict\_rate} = \frac{\left|\left\{(q, s) \in Q \times \Sigma : \left|\left\{\delta_{\text{temp}}(q, s)\right\}\right| > 1\right\}\right|}{\left|\left\{(q, s) \in Q \times \Sigma : \delta_{\text{temp}}(q, s) \neq \emptyset\right\}\right|}
+  \text{conflict\_rate} = \frac{\left|\left\{(q, s) \in Q \times
+      \Sigma : \left|\left\{\delta_{\text{temp}}(q, s)\right\}\right| >
+  1\right\}\right|}{\left|\left\{(q, s) \in Q \times \Sigma :
+  \delta_{\text{temp}}(q, s) \neq \emptyset\right\}\right|}
 \end{equation}
 
-Trong đó $\delta_{\text{temp}}(q, s)$ là tập hợp các trạng thái tiếp theo được quan sát trong dữ liệu huấn luyện khi hệ thống ở trạng thái $q$ và nhận đầu vào là syscall $s$.
+Trong đó $\delta_{\text{temp}}(q, s)$ là tập hợp các trạng thái tiếp
+theo được quan sát trong dữ liệu huấn luyện khi hệ thống ở trạng thái
+$q$ và nhận đầu vào là syscall $s$.
 
-Trong pipeline đã hiện thực hóa, tập $\delta_{\text{temp}}(q,s)$ được xây dựng dưới
-dạng bộ đếm chứ không chỉ là tập hợp nhị phân. Mỗi lần quan sát một đoạn liên tiếp
-$(q_t,s_{t+1},q_{t+1})$, hệ thống tăng bộ đếm cho nhánh $q_{t+1}$ của khóa $(q_t,s_{t+1})$.
-Nhờ vậy, cùng một quan hệ NFA thô có thể được giải quyết theo nhiều chính sách khác
-nhau: subset construction giữ toàn bộ tập đích, majority voting giữ nhánh xuất hiện
-nhiều nhất, còn statistical pruning chỉ giữ nhánh dominant nếu tỷ lệ của nó vượt ngưỡng
+Trong pipeline đã hiện thực hóa, tập $\delta_{\text{temp}}(q,s)$ được
+xây dựng dưới
+dạng bộ đếm chứ không chỉ là tập hợp nhị phân. Mỗi lần quan sát một
+đoạn liên tiếp
+$(q_t,s_{t+1},q_{t+1})$, hệ thống tăng bộ đếm cho nhánh $q_{t+1}$ của
+khóa $(q_t,s_{t+1})$.
+Nhờ vậy, cùng một quan hệ NFA thô có thể được giải quyết theo nhiều
+chính sách khác
+nhau: subset construction giữ toàn bộ tập đích, majority voting giữ
+nhánh xuất hiện
+nhiều nhất, còn statistical pruning chỉ giữ nhánh dominant nếu tỷ lệ
+của nó vượt ngưỡng
 $\theta$.
 
-\textbf{Khẳng định:} Đối với dữ liệu chuỗi syscall có phân phối bước chuyển bị lệch mạnh (strongly skewed distribution), tỷ lệ xung đột của automata giảm đơn điệu theo số lượng cụm K-Means $K$ và được giảm thiểu hiệu quả thông qua chiến lược cắt tỉa thống kê S4 (Statistical State Transition Pruning).
+\textbf{Khẳng định:} Đối với dữ liệu chuỗi syscall có phân phối bước
+chuyển bị lệch mạnh (strongly skewed distribution), tỷ lệ xung đột
+của automata giảm đơn điệu theo số lượng cụm K-Means $K$ và được giảm
+thiểu hiệu quả thông qua chiến lược cắt tỉa thống kê S4 (Statistical
+State Transition Pruning).
 
-\textbf{Lập luận chứng minh:} Nếu hai chuỗi syscall khác nhau đạt đến cùng một cụm trạng thái ẩn $q$ thông qua các lịch sử thực thi khác nhau, nhưng chúng có hành vi chuyển tiếp giống hệt nhau trong tương lai (tức là cùng dẫn đến việc chuyển dịch sang một trạng thái tiếp theo duy nhất cho mỗi syscall đầu vào), thì không có xung đột nào phát sinh trong bảng chuyển trạng thái. Xung đột chỉ thực sự xảy ra khi thuật toán K-Means gộp hai lịch sử thực thi khác nhau vào cùng một cụm $q$, trong khi mô hình Transformer Teacher có khả năng phân biệt chúng dựa trên ngữ cảnh dài hạn và đưa ra các dự đoán xác suất khác nhau cho syscall tiếp theo.
+\textbf{Lập luận chứng minh:} Nếu hai chuỗi syscall khác nhau đạt đến
+cùng một cụm trạng thái ẩn $q$ thông qua các lịch sử thực thi khác
+nhau, nhưng chúng có hành vi chuyển tiếp giống hệt nhau trong tương
+lai (tức là cùng dẫn đến việc chuyển dịch sang một trạng thái tiếp
+theo duy nhất cho mỗi syscall đầu vào), thì không có xung đột nào
+phát sinh trong bảng chuyển trạng thái. Xung đột chỉ thực sự xảy ra
+khi thuật toán K-Means gộp hai lịch sử thực thi khác nhau vào cùng
+một cụm $q$, trong khi mô hình Transformer Teacher có khả năng phân
+biệt chúng dựa trên ngữ cảnh dài hạn và đưa ra các dự đoán xác suất
+khác nhau cho syscall tiếp theo.
 
-Khi tăng giá trị $K$ (số lượng tâm cụm của K-Means), ranh giới phân mảnh của không gian trạng thái ẩn liên tục sẽ trở nên mịn hơn. Điều này trực tiếp làm giảm xác suất gộp các lịch sử thực thi có hành vi tương lai khác nhau vào cùng một cụm, từ đó làm giảm tỷ lệ xung đột $\text{conflict\_rate}$ một cách đơn điệu.
+Khi tăng giá trị $K$ (số lượng tâm cụm của K-Means), ranh giới phân
+mảnh của không gian trạng thái ẩn liên tục sẽ trở nên mịn hơn. Điều
+này trực tiếp làm giảm xác suất gộp các lịch sử thực thi có hành vi
+tương lai khác nhau vào cùng một cụm, từ đó làm giảm tỷ lệ xung đột
+$\text{conflict\_rate}$ một cách đơn điệu.
 
-Bên cạnh đó, chiến lược cắt tỉa thống kê S4 đóng vai trò loại bỏ các xung đột giả tạo phát sinh do nhiễu lượng tử hóa. Trong quá trình gom cụm, một số bước chuyển trạng thái có tần suất xuất hiện cực kỳ thấp (nhỏ hơn ngưỡng cắt tỉa $\theta$) có thể được tạo ra do các điểm biên của cụm bám sát các mẫu nhiễu trong dữ liệu huấn luyện. Bằng cách áp dụng ngưỡng lọc $\theta$, chiến lược S4 loại bỏ các bước chuyển tần suất thấp này ra khỏi bảng chuyển tiếp DFA, giữ lại các bước chuyển chính chiếm ưu thế thống kê, từ đó triệt tiêu các xung đột mà không làm mất đi các hành vi bình thường cốt lõi của tiến trình.
+Bên cạnh đó, chiến lược cắt tỉa thống kê S4 đóng vai trò loại bỏ các
+xung đột giả tạo phát sinh do nhiễu lượng tử hóa. Trong quá trình gom
+cụm, một số bước chuyển trạng thái có tần suất xuất hiện cực kỳ thấp
+(nhỏ hơn ngưỡng cắt tỉa $\theta$) có thể được tạo ra do các điểm biên
+của cụm bám sát các mẫu nhiễu trong dữ liệu huấn luyện. Bằng cách áp
+dụng ngưỡng lọc $\theta$, chiến lược S4 loại bỏ các bước chuyển tần
+suất thấp này ra khỏi bảng chuyển tiếp DFA, giữ lại các bước chuyển
+chính chiếm ưu thế thống kê, từ đó triệt tiêu các xung đột mà không
+làm mất đi các hành vi bình thường cốt lõi của tiến trình.
 
-\textbf{Phương pháp đối chiếu thực nghiệm:} Để kiểm chứng các lập luận lý thuyết nêu trên, hệ thống thực hiện đo đạc thực nghiệm tỷ lệ xung đột, tỷ lệ báo động giả (FPR) và độ trung thực (fidelity) của DFA Student so với Transformer Teacher trên các miền cấu hình siêu tham số của số lượng trạng thái $K$ và ngưỡng cắt tỉa thống kê $\theta$. Các kết quả đo đạc định lượng, bảng biểu đối chiếu chi tiết và đồ thị liên quan cho từng chiến lược giải quyết tính không xác định sẽ được trình bày và phân tích chi tiết trong Chương 5, làm cơ sở thực chứng để lựa chọn cấu hình tối ưu cho hệ thống thực tế.
+\textbf{Phương pháp đối chiếu thực nghiệm:} Để kiểm chứng các lập
+luận lý thuyết nêu trên, hệ thống thực hiện đo đạc thực nghiệm tỷ lệ
+xung đột, tỷ lệ báo động giả (FPR) và độ trung thực (fidelity) của
+DFA Student so với Transformer Teacher trên các miền cấu hình siêu
+tham số của số lượng trạng thái $K$ và ngưỡng cắt tỉa thống kê
+$\theta$. Các kết quả đo đạc định lượng, bảng biểu đối chiếu chi tiết
+và đồ thị liên quan cho từng chiến lược giải quyết tính không xác
+định sẽ được trình bày và phân tích chi tiết trong Chương 5, làm cơ
+sở thực chứng để lựa chọn cấu hình tối ưu cho hệ thống thực tế.
 
-\section{Khả năng kháng Mimicry Attack (Resistance to Mimicry Attack)}
+\section{Khả năng kháng Mimicry Attack}
 \label{sec:mimicry_attack}
 
-Mimicry Attack là một kỹ thuật tấn công tinh vi nhắm vào các hệ thống phát hiện bất thường dựa trên hành vi. Kẻ tấn công cố gắng ngụy trang chuỗi các syscall độc hại bằng cách chèn thêm các syscall vô hại (padding syscalls hoặc no-op syscalls như \texttt{getpid}, \texttt{nanosleep}) vào giữa các lệnh khai thác thực tế. Mục tiêu của việc chèn này là làm giãn cách chuỗi khai thác để các cửa sổ trượt thu thập dữ liệu tại runtime không chứa đủ tín hiệu bất thường, từ đó vượt qua bộ lọc phát hiện.
+Mimicry Attack \cite{wagner2002mimicry} là một kỹ thuật tấn công tinh vi nhắm vào các hệ thống
+phát hiện bất thường dựa trên hành vi. Kẻ tấn công cố gắng ngụy trang
+chuỗi các syscall độc hại bằng cách chèn thêm các syscall vô hại
+(padding syscalls hoặc no-op syscalls như \texttt{getpid},
+\texttt{nanosleep}) vào giữa các lệnh khai thác thực tế. Mục tiêu của
+việc chèn này là làm giãn cách chuỗi khai thác để các cửa sổ trượt
+thu thập dữ liệu tại runtime không chứa đủ tín hiệu bất thường, từ đó
+vượt qua bộ lọc phát hiện.
 
-\textbf{Khẳng định:} Việc chèn các syscall đệm độc lập với số lượng $k$ sẽ làm cho con trỏ trạng thái hiện tại của DFA trôi dần vào các trạng thái nghi vấn (suspect states) có tần suất xuất hiện thấp trong dữ liệu bình thường, hoặc gặp một bước chuyển không tồn tại và bị phân loại là attack.
+\textbf{Khẳng định:} Việc chèn các syscall đệm độc lập với số lượng
+$k$ sẽ làm cho con trỏ trạng thái hiện tại của DFA trôi dần vào các
+trạng thái nghi vấn (suspect states) có tần suất xuất hiện thấp trong
+dữ liệu bình thường, hoặc gặp một bước chuyển không tồn tại và bị
+phân loại là attack.
 
-\textbf{Lập luận chứng minh:} Giả sử chuỗi syscall khai thác độc hại ban đầu là $e_1, e_2, \dots, e_m$. Kẻ tấn công thực hiện chèn $k$ syscall đệm $p_1, p_2, \dots, p_k$ vào giữa $e_i$ và $e_{i+1}$. Để cuộc tấn công không bị phát hiện ngay lập tức bởi whitelist của DFA, mỗi syscall đệm $p_j$ bắt buộc phải đại diện cho một bước chuyển hợp lệ từ trạng thái hiện tại của DFA.
+\textbf{Lập luận chứng minh:} Giả sử chuỗi syscall khai thác độc hại
+ban đầu là $e_1, e_2, \dots, e_m$. Kẻ tấn công thực hiện chèn $k$
+syscall đệm $p_1, p_2, \dots, p_k$ vào giữa $e_i$ và $e_{i+1}$. Để
+cuộc tấn công không bị phát hiện ngay lập tức bởi whitelist của DFA,
+mỗi syscall đệm $p_j$ bắt buộc phải đại diện cho một bước chuyển hợp
+lệ từ trạng thái hiện tại của DFA.
 
-Tuy nguyên tắc này đơn giản, do các trạng thái nằm trên lộ trình khai thác (exploit path) tương ứng với chuỗi $e_1, \dots, e_i$ có bản chất là bất thường và không xuất hiện trong tập dữ liệu huấn luyện bình thường (mô hình Teacher chỉ học phân phối hành vi bình thường), việc thực hiện một syscall đệm $p_1$ (dù là một syscall bình thường trong ngữ cảnh khác) từ một trạng thái thuộc exploit-path sẽ dẫn DFA đến một trạng thái mới $q'$. Trạng thái $q'$ này chưa từng được quan sát thấy trong pha huấn luyện lành tính do sự kết hợp bất thường giữa ngữ cảnh lịch sử khai thác và syscall đệm.
+Tuy nguyên tắc này đơn giản, do các trạng thái nằm trên lộ trình khai
+thác (exploit path) tương ứng với chuỗi $e_1, \dots, e_i$ có bản chất
+là bất thường và không xuất hiện trong tập dữ liệu huấn luyện bình
+thường (mô hình Teacher chỉ học phân phối hành vi bình thường), việc
+thực hiện một syscall đệm $p_1$ (dù là một syscall bình thường trong
+ngữ cảnh khác) từ một trạng thái thuộc exploit-path sẽ dẫn DFA đến
+một trạng thái mới $q'$. Trạng thái $q'$ này chưa từng được quan sát
+thấy trong pha huấn luyện lành tính do sự kết hợp bất thường giữa ngữ
+cảnh lịch sử khai thác và syscall đệm.
 
 Hệ quả là, trạng thái $q'$ sẽ rơi vào một trong hai trường hợp sau:
 \begin{enumerate}
-  \item Gặp phân loại attack do không tồn tại bước chuyển đi hợp lệ cho syscall tiếp theo trong bảng chuyển trạng thái DFA.
-  \item Trở thành một trạng thái nghi vấn (suspect state) có xác suất chuyển tiếp thấp. Khi kẻ tấn công tiếp tục thực thi các syscall khai thác tiếp theo $e_{i+1}$, bước chuyển dịch từ $q'$ qua $e_{i+1}$ sẽ bị coi là bất thường và kích hoạt cảnh báo.
+  \item Gặp phân loại attack do không tồn tại bước chuyển đi hợp lệ
+    cho syscall tiếp theo trong bảng chuyển trạng thái DFA.
+  \item Trở thành một trạng thái nghi vấn (suspect state) có xác suất
+    chuyển tiếp thấp. Khi kẻ tấn công tiếp tục thực thi các syscall
+    khai thác tiếp theo $e_{i+1}$, bước chuyển dịch từ $q'$ qua
+    $e_{i+1}$ sẽ bị coi là bất thường và kích hoạt cảnh báo.
 \end{enumerate}
 
-Cơ chế này đảm bảo DFA duy trì khả năng phát hiện độc lập với số lượng syscall đệm $k$ được chèn vào hệ thống.
+Cơ chế này đảm bảo DFA duy trì khả năng phát hiện độc lập với số
+lượng syscall đệm $k$ được chèn vào hệ thống.
 
-\textbf{Giới hạn lý thuyết:} Khả năng kháng cự này phụ thuộc nghiêm ngặt vào điều kiện các trạng thái trên lộ trình khai thác độc hại được phân tách rõ ràng với các trạng thái bình thường trong không gian nhúng của Transformer. Nếu số lượng cụm $K$ của thuật toán K-Means được chọn quá nhỏ, lỗi lượng tử hóa sẽ tăng lên, dẫn đến việc K-Means gom cụm các trạng thái bình thường và các trạng thái khai thác vào chung một thực thể trạng thái DFA. Khi đó, kẻ tấn công có thể lợi dụng các bước chuyển bình thường có sẵn của trạng thái bị gộp này để thực hiện cuộc tấn công bắt chước thành công. Điều này nhấn mạnh tầm quan trọng của việc lựa chọn tham số $K$ đủ lớn để duy trì ranh giới quyết định sắc bén cho DFA.
+\textbf{Giới hạn lý thuyết:} Khả năng kháng cự này phụ thuộc nghiêm
+ngặt vào điều kiện các trạng thái trên lộ trình khai thác độc hại
+được phân tách rõ ràng với các trạng thái bình thường trong không
+gian nhúng của Transformer. Nếu số lượng cụm $K$ của thuật toán
+K-Means được chọn quá nhỏ, lỗi lượng tử hóa sẽ tăng lên, dẫn đến việc
+K-Means gom cụm các trạng thái bình thường và các trạng thái khai
+thác vào chung một thực thể trạng thái DFA. Khi đó, kẻ tấn công có
+thể lợi dụng các bước chuyển bình thường có sẵn của trạng thái bị gộp
+này để thực hiện cuộc tấn công bắt chước thành công. Điều này nhấn
+mạnh tầm quan trọng của việc lựa chọn tham số $K$ đủ lớn để duy trì
+ranh giới quyết định sắc bén cho DFA.
 
-\section{Giới hạn độ trung thực của DFA (DFA Fidelity Bound)}
+\section{Giới hạn độ trung thực của DFA}
 \label{sec:dfa_fidelity_bound}
 
-Độ trung thực (Fidelity) là chỉ số đo lường mức độ tương đồng giữa quyết định phân loại của mô hình Student (DFA) và mô hình Teacher (Transformer). Trong bài toán phát hiện bất thường, Fidelity được định nghĩa là tỷ lệ phần trăm các cửa sổ trượt trong tập kiểm thử mà cả DFA và Transformer đồng thuận về phán quyết bất thường (tức là cả hai cùng phân loại cửa sổ đó là bình thường hoặc cùng phân loại là bất thường dựa trên các ngưỡng quyết định tương ứng).
+Độ trung thực (Fidelity) là chỉ số đo lường mức độ tương đồng giữa
+quyết định phân loại của mô hình Student (DFA) và mô hình Teacher
+(Transformer). Trong bài toán phát hiện bất thường, Fidelity được
+định nghĩa là tỷ lệ phần trăm các cửa sổ trượt trong tập kiểm thử mà
+cả DFA và Transformer đồng thuận về phán quyết bất thường (tức là cả
+  hai cùng phân loại cửa sổ đó là bình thường hoặc cùng phân loại là
+bất thường dựa trên các ngưỡng quyết định tương ứng).
 
-\textbf{Giới hạn trên của Fidelity:} Độ trung thực tối đa mà DFA có thể đạt được bị giới hạn trên bởi lỗi lượng tử hóa (quantization error) của thuật toán gom cụm K-Means khi ánh xạ không gian vector liên tục sang tập trạng thái rời rạc.
+\textbf{Giới hạn trên của Fidelity:} Độ trung thực tối đa mà DFA có
+thể đạt được bị giới hạn trên bởi lỗi lượng tử hóa (quantization
+error) của thuật toán gom cụm K-Means khi ánh xạ không gian vector
+liên tục sang tập trạng thái rời rạc.
 
-Xét hai cửa sổ trượt syscall $w_1$ và $w_2$ tạo ra cùng một chuỗi các trạng thái DFA (tức là chúng có cùng một quỹ đạo duyệt đồ thị trạng thái của automata). Tuy nhiên, do mô hình Transformer hoạt động trên không gian vector liên tục, điểm số bất thường (Negative Log-Likelihood - NLL) mà Transformer tính toán cho hai cửa sổ này có thể khác nhau:
+Xét hai cửa sổ trượt syscall $w_1$ và $w_2$ tạo ra cùng một chuỗi các
+trạng thái DFA (tức là chúng có cùng một quỹ đạo duyệt đồ thị trạng
+thái của automata). Tuy nhiên, do mô hình Transformer hoạt động trên
+không gian vector liên tục, điểm số bất thường (Negative
+Log-Likelihood - NLL) mà Transformer tính toán cho hai cửa sổ này có
+thể khác nhau:
 
 \begin{equation}
   \label{eq:nll_difference}
   \text{NLL}_{\text{Transformer}}(w_1) \neq \text{NLL}_{\text{Transformer}}(w_2)
 \end{equation}
 
-Nếu điểm số NLL của $w_1$ nằm dưới ngưỡng phát hiện bất thường $\tau$ nhưng điểm số NLL của $w_2$ lại nằm trên ngưỡng $\tau$, mô hình Transformer Teacher sẽ đưa ra hai phán quyết khác nhau cho hai cửa sổ này. Tuy nhiên, vì cả hai cửa sổ đều có chung quỹ đạo trạng thái trong DFA, mô hình DFA Student buộc phải đưa ra cùng một phán quyết cho cả hai. Hiện tượng này được gọi là \textbf{va chạm lượng tử hóa (quantization collision)}.
+Nếu điểm số NLL của $w_1$ nằm dưới ngưỡng phát hiện bất thường $\tau$
+nhưng điểm số NLL của $w_2$ lại nằm trên ngưỡng $\tau$, mô hình
+Transformer Teacher sẽ đưa ra hai phán quyết khác nhau cho hai cửa sổ
+này. Tuy nhiên, vì cả hai cửa sổ đều có chung quỹ đạo trạng thái
+trong DFA, mô hình DFA Student buộc phải đưa ra cùng một phán quyết
+cho cả hai. Hiện tượng này được gọi là \textbf{va chạm lượng tử hóa
+(quantization collision)}.
 
-Sự mất mát độ trung thực (loss of fidelity) tỷ lệ thuận với tần suất xuất hiện của các va chạm lượng tử hóa này trên tập dữ liệu kiểm thử. Để giảm thiểu va chạm, ta cần tăng số lượng trạng thái DFA $K$ để thu hẹp khoảng cách lượng tử hóa và tăng độ mịn của ranh giới quyết định. Tuy nhiên, việc tăng $K$ lại làm tăng kích thước bộ nhớ cần thiết để lưu trữ bảng chuyển trạng thái trên eBPF Maps như đã phân tích ở Mục~\ref{sec:dfa_size_ebpf_memory}.
+Sự mất mát độ trung thực (loss of fidelity) tỷ lệ thuận với tần suất
+xuất hiện của các va chạm lượng tử hóa này trên tập dữ liệu kiểm thử.
+Để giảm thiểu va chạm, ta cần tăng số lượng trạng thái DFA $K$ để thu
+hẹp khoảng cách lượng tử hóa và tăng độ mịn của ranh giới quyết định.
+Tuy nhiên, việc tăng $K$ lại làm tăng kích thước bộ nhớ cần thiết để
+lưu trữ bảng chuyển trạng thái trên eBPF Maps như đã phân tích ở
+Mục~\ref{sec:dfa_size_ebpf_memory}.
 
-Do đó, bài toán tối ưu hóa siêu tham số của Guepard Shield là tìm kiếm một giá trị $K$ tối ưu nhằm cực tiểu hóa hàm mục tiêu kết hợp giữa tỷ lệ báo động giả (FPR) và sai số độ trung thực:
+Do đó, bài toán tối ưu hóa siêu tham số của Guepard Shield là tìm
+kiếm một giá trị $K$ tối ưu nhằm cực tiểu hóa hàm mục tiêu kết hợp
+giữa tỷ lệ báo động giả (FPR) và sai số độ trung thực:
 
 \begin{equation}
   \label{eq:optimization_objective}
@@ -203,6 +511,8 @@ Dưới ràng buộc về mặt dung lượng lưu trữ của BPF Maps trong nh
   \text{Memory}(K) \le M_{\text{limit}}
 \end{equation}
 
-Việc giải quyết bài toán tối ưu hóa ràng buộc này cung cấp cơ sở toán học vững chắc để cân bằng giữa hiệu năng phát hiện bất thường và tính khả thi khi triển khai hệ thống trong nhân Linux thực tế.
+Việc giải quyết bài toán tối ưu hóa ràng buộc này cung cấp cơ sở toán
+học vững chắc để cân bằng giữa hiệu năng phát hiện bất thường và tính
+khả thi khi triển khai hệ thống trong nhân Linux thực tế.
 
 \end{document}

@@ -10,7 +10,6 @@ recording-level metrics.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -18,12 +17,11 @@ from lightning import Trainer
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
-
 from gp.datamodule import SyscallDataModule
 from gp.metrics import evaluate, select_threshold
 from gp.model import SyscallTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DATA_DIR   = PROJECT_ROOT / "data" / "processed" / "p2"
 

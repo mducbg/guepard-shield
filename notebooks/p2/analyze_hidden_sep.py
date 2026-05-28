@@ -27,7 +27,6 @@ Outputs:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -38,10 +37,9 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
-
 from gp.model import SyscallTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DATA_DIR  = PROJECT_ROOT / "data" / "processed" / "p2"
 SCORE_DIR = PROJECT_ROOT / "results" / "p2" / "scores"

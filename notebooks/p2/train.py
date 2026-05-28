@@ -11,17 +11,15 @@ to results/p2/checkpoints/.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
 
 from lightning import Trainer
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 from gp.datamodule import SyscallDataModule
 from gp.model import SyscallTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DATA_DIR   = PROJECT_ROOT / "data" / "processed" / "p2"
 CKPT_DIR   = PROJECT_ROOT / "results" / "p2" / "checkpoints"

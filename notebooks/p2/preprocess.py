@@ -12,18 +12,15 @@ Outputs to data/processed/p2/:
 
 from __future__ import annotations
 
-import sys
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
 
-# ── project imports ──────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
-
 from gp.data_loader.lidds_2021_loader import LiddS2021Loader, stream_and_window
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 _NON_SCENARIO = {"_lidds_seq_lengths.json", "README.md"}
 _TEST_SUBDIRS = ["test/normal", "test/normal_and_attack"]

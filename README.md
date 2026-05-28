@@ -63,8 +63,8 @@ cargo build --release
 
 - **Giai đoạn 1 (EDA):** ✅ **Hoàn thành**. Đã phân tích các bộ dữ liệu LID-DS và DongTing.
 - **Giai đoạn 2 (Teacher):** ✅ **Hoàn thành**. Mô hình Transformer đạt AUROC 0.85 trên tập test LID-DS-2021.
-- **Giai đoạn 3 (Student):** ⏳ **Đang triển khai**. Thiết kế thuật toán trích xuất DFA đã hoàn tất.
-- **Giai đoạn 4 (Deployment):** ⏳ **Kế hoạch**. Đã xây dựng khung (scaffold) eBPF.
+- **Giai đoạn 3 (Student):** ✅ **Hoàn thành**. DFA 64 trạng thái được chưng cất thành công: DR_rec=90.85%, FPR=1.41%, Fidelity với Teacher=98.12%.
+- **Giai đoạn 4 (Deployment):** ✅ **Hoàn thành**. eBPF DFA enforcement triển khai bằng Rust/Aya, độ phức tạp O(1) mỗi syscall.
 
 Để biết chi tiết kỹ thuật và kết quả thực nghiệm cụ thể, vui lòng xem:
 👉 **[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)** (Báo cáo tiến độ chi tiết)

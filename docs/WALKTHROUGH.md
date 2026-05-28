@@ -124,6 +124,11 @@ Max-window NLL đảo ngược dấu ở cấp độ bản ghi (AUROC dương) b
 
 ---
 
-## ⏳ Giai đoạn 4: Triển khai (Deployment) — Theo kế hoạch
+## ✅ Giai đoạn 4: Triển khai (Deployment) — Hoàn thành
 
-Mã nguồn Rust / Aya trong kho lưu trữ này hiện vẫn chỉ là khung (scaffold). Nó chưa được kết nối với mô hình Giai đoạn 2 đã huấn luyện hay một tạo tác (artifact) đã được chưng cất từ Giai đoạn 3.
+eBPF DFA enforcement được triển khai đầy đủ bằng Rust/Aya:
+
+- **Agent userspace** (`guepard-shield/`): nạp DFA từ `dfa_config.json`, điền vào eBPF maps (`TRANSITION_TABLE`, `SYSCALL_TO_TOKEN`, `STATE_CLASS`), bắt sự kiện SUSPECT/ATTACK qua ring buffer.
+- **Chương trình eBPF kernel** (`guepard-shield-ebpf/`): tracepoint `raw_syscalls/sys_enter`, tra cứu DFA O(1) mỗi syscall, phát hiện ATTACK (không có transition) và SUSPECT (trạng thái tần suất thấp).
+- **Đo độ trễ**: histogram 32 bucket × 100 ns, p50/p99/p999 được ghi ra file.
+- **Benchmark Transformer** (`notebooks/p4/benchmark_transformer.py`): đo throughput và latency của mô hình Teacher làm baseline so sánh.

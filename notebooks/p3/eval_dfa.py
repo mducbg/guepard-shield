@@ -45,13 +45,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
-
 from gp.datamodule import SyscallDataModule
 from gp.dfa.evaluate import DFAEvaluator
 from gp.model import SyscallTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
 
 DATA_DIR     = PROJECT_ROOT / "data" / "processed" / "p2"
 HIDDEN_DIR   = PROJECT_ROOT / "results" / "p3" / "hidden_states"

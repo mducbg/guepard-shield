@@ -22,11 +22,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from gp.dfa.transitions import TransitionBuilder
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
-
-from gp.dfa.transitions import TransitionBuilder
 
 HIDDEN_DIR  = PROJECT_ROOT / "results" / "p3" / "hidden_states"
 CLUSTER_DIR = PROJECT_ROOT / "results" / "p3" / "clusters"
@@ -81,7 +80,7 @@ def run_k(K: int, M: int, vocab_size: int, stride: int = 1) -> None:
     )
 
     builder = TransitionBuilder(labels, meta, vocab_size, stride=stride)
-    print(f"  Building NFA...")
+    print("  Building NFA...")
     builder.build_nfa()
 
     nd = builder.nd_rate()
@@ -103,7 +102,7 @@ def run_k(K: int, M: int, vocab_size: int, stride: int = 1) -> None:
     print("  Resolving S1 (subset construction)...")
     s1_trans = builder.resolve_s1(initial_cluster=start_cluster)
     if s1_trans is None:
-        print(f"  S1: state explosion — skipping export")
+        print("  S1: state explosion — skipping export")
         (out / "transitions.npz").unlink(missing_ok=True)
         (out / "state_explosion.txt").write_text("1\n")
     else:

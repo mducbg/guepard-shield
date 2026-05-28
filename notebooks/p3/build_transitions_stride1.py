@@ -26,13 +26,12 @@ import seaborn as sns
 import torch
 from sklearn.metrics import pairwise_distances_argmin
 from tqdm import tqdm
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
-
 from gp.data_loader.lidds_2021_loader import LiddS2021Loader, UNK_TOKEN
 from gp.dfa.transitions import TransitionBuilder
 from gp.model import SyscallTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "guepard-shield-model"))
 
 DATA_DIR    = PROJECT_ROOT / "data" / "extracted" / "LID-DS-2021"
 VOCAB_PATH  = PROJECT_ROOT / "data" / "processed" / "p2" / "vocab.json"

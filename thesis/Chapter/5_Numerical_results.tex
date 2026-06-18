@@ -236,7 +236,8 @@ sử dụng xuyên suốt chương này.
 \section{Các chỉ số đánh giá}
 \label{sec:eval_metrics}
 
-Đối với Giai đoạn 2, chỉ số chính là AUROC \cite{fawcett2006auroc} và PR-AUC ở cấp độ window,
+Đối với Giai đoạn 2, chỉ số chính là AUROC \cite{fawcett2006auroc} và
+PR-AUC ở cấp độ window,
 sử dụng điểm
 bất thường là negative log-likelihood (NLL) của token cuối cùng trong
 window. AUROC
@@ -570,11 +571,12 @@ chẩn đoán bổ sung.
 
 Giai đoạn 3 sử dụng các trạng thái ẩn của Transformer Teacher để tạo
 biểu diễn rời rạc
-bằng MiniBatchKMeans. Phiên thí nghiệm hoàn chỉnh hiện tại đánh giá
-$K = 64$ với trạng
-thái khởi đầu là cluster 59, tức cluster phổ biến nhất tại vị trí
-khởi đầu trong tập
-train. Bảng chữ cái đầu vào khi build DFA có 816 token ID quan sát
+bằng MiniBatchKMeans. Toàn bộ miền $K \in \{64, 128, 256, 512\}$ được
+đánh giá; phần trình bày dưới đây tập trung vào $K = 64$ là cấu hình
+khả dụng duy nhất (lý do được phân tích tại Mục~\ref{subsec:p3_limits}).
+Start state là cluster 59, tức cluster phổ biến nhất tại vị trí
+khởi đầu trong tập train. Bảng chữ cái đầu vào khi build DFA có 816
+token ID quan sát
 được trong pipeline
 đánh giá chuyển trạng thái. NFA được dựng bằng cách stream toàn bộ
 tập train ở stride
@@ -596,7 +598,7 @@ $K=64$ vẫn còn khá thô: một cluster có thể chứa nhiều ngữ cảnh
 syscall khác nhau, nên
 cùng một token đầu vào từ cùng cluster có thể dẫn sang nhiều cluster tiếp theo.
 
-\begin{figure}[H]
+\begin{figure}[h!]
   \centering
   \begin{tikzpicture}[
       x=1cm, y=1cm,
@@ -631,21 +633,22 @@ cùng một token đầu vào từ cùng cluster có thể dẫn sang nhiều cl
     \node[font=\scriptsize, red!70] at (2.65,2.65) {$c_j$};
     \node[font=\scriptsize, red!70] at (3.85,0.72) {$c_k$};
 
-    \draw[arrow] (5.05,1.75) -- (6.2,1.75)
-    node[midway, above, font=\small] {nearest centroid};
-
     \node[panel, minimum width=3.3cm, minimum height=3.55cm] (dfapanel)
-    at (8.0,1.75) {};
-    \node[font=\small] at (8.0,3.35) {DFA states};
-    \node[state] (q1) at (7.25,2.35) {$q_i$};
-    \node[state] (q2) at (8.65,2.35) {$q_j$};
-    \node[state] (q3) at (8.0,1.10) {$q_k$};
+    at (8.2,1.75) {};
+    \node[font=\small] at (8.2,3.35) {DFA states};
+    \node[state] (q1) at (7.45,2.35) {$q_i$};
+    \node[state] (q2) at (8.85,2.35) {$q_j$};
+    \node[state] (q3) at (8.2,1.10) {$q_k$};
     \draw[arrow] (q1) -- node[above, font=\scriptsize] {$s_a$} (q2);
     \draw[arrow] (q2) -- node[right, font=\scriptsize] {$s_b$} (q3);
     \draw[arrow] (q1) -- node[left, font=\scriptsize] {$s_c$} (q3);
 
+    \draw[arrow] (5.05,1.75) -- (6.55,1.75)
+    node[midway, above, font=\small, fill=white, inner sep=1.5pt]
+    {nearest centroid};
+
     \node[draw, rounded corners=2pt, fill=green!8, align=center, font=\small,
-    minimum width=2.45cm] at (8.0,0.25) {$K=64$
+    minimum width=2.45cm] at (8.2,0.25) {$K=64$
     clusters\\$\rightarrow$ 64 states};
   \end{tikzpicture}
   \caption{Minh họa bước K-Means trong Giai đoạn 3. Các vector hidden
@@ -667,8 +670,11 @@ cho thấy chỉ S3
 construction từ
 NFA sang DFA, gặp bùng nổ trạng thái và vượt ngưỡng cắt 10 lần $K$
 trước khi tạo được
-DFA gọn. S4, tức statistical pruning theo ngưỡng $\theta$, loại bỏ
-quá nhiều transition
+DFA gọn. S2, tức tăng $K$ để gom cụm tinh hơn nhằm giảm
+non-determinism, không cải thiện được tình trạng do vấn đề empty
+clusters khi $K > 64$; phân tích chi tiết được trình bày tại
+Mục~\ref{subsec:p3_limits}. S4, tức statistical pruning theo ngưỡng
+$\theta$, loại bỏ quá nhiều transition
 do không có nhánh nào đủ thống trị trong phần lớn các cặp không đơn định.
 Hình~\ref{fig:p3_fpr_dr} minh họa đánh đổi tổng quát.
 
@@ -695,10 +701,10 @@ Hình~\ref{fig:p3_fpr_dr} minh họa đánh đổi tổng quát.
     {\textcolor{red!60}{\rule{0.35cm}{5pt}} FPR\\
     \textcolor{green!55!black}{\rule{0.35cm}{5pt}} $DR_{\text{rec}}$};
   \end{tikzpicture}
-  \caption{Đánh đổi giữa FPR và $DR_{\text{rec}}$ của các chiến lược DFA. S4 đạt
-    $DR_{\text{rec}}$ tuyệt đối bằng cách gắn attack cho gần như toàn
-    bộ window normal, nên
-  không thể dùng trong triển khai.}
+  \caption{Đánh đổi giữa FPR và $DR_{\text{rec}}$ của các chiến lược DFA. S1
+    không xuất hiện vì gặp bùng nổ trạng thái và không tạo được DFA hoàn chỉnh.
+    S4 đạt $DR_{\text{rec}}$ tuyệt đối bằng cách gắn attack cho gần như toàn
+  bộ window normal, nên không thể dùng trong triển khai.}
   \label{fig:p3_fpr_dr}
 \end{figure}
 
@@ -909,19 +915,21 @@ tồn tại transition hợp lệ.
 \label{subsec:p3_limits}
 
 Thực nghiệm Giai đoạn 3 đã đánh giá toàn bộ miền $K \in \{64, 128,
-256, 512\}$. Tuy nhiên, chỉ cấu hình $K = 64$ cho kết quả khả dụng;
-các cấu hình $K$ lớn hơn đều cho kết quả tệ hơn và không phù hợp để
-phát triển tiếp theo.
+256, 512\}$, bao gồm cả chiến lược S2 (tăng $K$ để giảm
+non-determinism). Tuy nhiên, chỉ cấu hình $K = 64$ cho kết quả khả
+dụng; các cấu hình $K$ lớn hơn đều cho kết quả tệ hơn và không phù
+hợp để phát triển tiếp theo.
 
 Nguyên nhân cốt lõi là tỷ lệ empty clusters rất cao khi tăng $K$.
 Với $K = 128$, phần lớn centroid không được gán bởi bất kỳ hidden
 state nào trong tập train ngay cả sau khi tăng số lần khởi tạo và
-batch size lên đáng kể. Hiện tượng này phản ánh thực tế rằng không
-gian hidden state $d = 128$ chiều của Teacher, khi chiếu lên phân
-phối syscall của LID-DS, có số chiều hiệu dụng thấp hơn nhiều so với
-128, 256 hay 512. Buộc phân cụm vào nhiều cluster hơn khả năng của
-dữ liệu chỉ phân mảnh các vùng có ý nghĩa mà không tạo ra ranh giới
-mới mang thông tin.
+batch size lên đáng kể. Hiện tượng này phản ánh thực tế rằng phân
+phối syscall của LID-DS
+chỉ lấp đầy một số chiều hiệu dụng nhỏ trong không gian hidden state
+$d = 128$ chiều của Teacher - số cụm có nghĩa mà dữ liệu có thể hỗ
+trợ thấp hơn nhiều so với $K = 128$, $256$ hay $512$. Buộc phân cụm
+vào nhiều cluster hơn khả năng của dữ liệu chỉ phân mảnh các vùng có
+ý nghĩa mà không tạo ra ranh giới mới mang thông tin.
 
 Hậu quả đối với chất lượng DFA là kép và bất lợi ở cả hai chiều.
 Thứ nhất, khi cluster thưa và kém đại diện hơn, tỷ lệ non-determinism
@@ -961,41 +969,51 @@ workload.
 \subsection{Thiết lập thực nghiệm}
 \label{subsec:p4_setup}
 
-\textbf{E1 — eBPF DFA latency.}
-Một histogram 32 bucket, mỗi bucket rộng 100~ns (bucket cuối là
-overflow $\geq 3{,}100$~ns), được tích hợp vào eBPF program bằng cấu
-trúc \texttt{PerCpuArray} để tránh atomic increment trong hot path —
-mỗi CPU core cộng dồn vào slot riêng, userspace tổng hợp sau khi
-chương trình kết thúc. Hai lần gọi \texttt{bpf\_ktime\_get\_ns()} bao
-quanh toàn bộ logic DFA: tra cứu token syscall, tra cứu bảng chuyển
-trạng thái, và cập nhật trạng thái của process. Hai điều kiện đo được
-thực hiện: (a) \emph{standalone} — DFA monitor toàn bộ process trên hệ
-thống, thu thập tối thiểu 1~triệu samples; (b) \emph{E3~embedded} —
-DFA chỉ monitor nginx worker trong suốt 60~giây của E3, phản ánh
-workload HTTP thực tế.
+\textbf{E1 - Độ trễ eBPF DFA.}
+Để đo thời gian xử lý mỗi syscall, một histogram 32 bucket được xây
+dựng ngay trong kernel thông qua cấu trúc \texttt{PerCpuArray}, mỗi
+bucket rộng 100~ns và bucket cuối gom toàn bộ các giá trị từ
+$3{,}100$~ns trở lên. Nhờ lưu dữ liệu trong kernel thay vì truyền từng
+mẫu lên userspace, cách này tránh được chi phí atomic increment trong
+hot path; mỗi lõi CPU cộng dồn vào ngăn riêng của mình và phía
+người dùng chỉ tổng hợp một lần sau khi chương trình kết thúc. Hai lần gọi
+\texttt{bpf\_ktime\_get\_ns()} được đặt bao quanh toàn bộ logic DFA -
+bao gồm tra cứu token syscall, tra cứu bảng chuyển trạng thái và cập
+nhật trạng thái tiến trình - để tính thời gian thực thi chính xác. Thí
+nghiệm được tiến hành ở hai điều kiện: điều kiện \emph{độc lập}, khi
+DFA giám sát tất cả tiến trình đang chạy trên hệ thống và thu thập ít
+nhất một triệu mẫu; và điều kiện \emph{nhúng trong E3}, khi DFA chỉ
+giám sát tiến trình worker của nginx trong suốt 60~giây của E3, phản
+ánh tải HTTP thực tế.
 
-\textbf{E2 — Transformer CPU latency.}
-Checkpoint Transformer từ Giai đoạn 2 được nạp và 100 lần chạy warmup
-được thực hiện trước khi đo 10.000 lần single-sample inference trên
-CPU, không GPU, không batch. Kịch bản này phản ánh điều kiện inline
-enforcement thực tế khi cần phán quyết tức thì sau mỗi window.
+\textbf{E2 - Độ trễ suy luận Transformer trên CPU.}
+Trọng số Transformer từ Giai đoạn~2 được nạp lại, sau đó cho chạy 100
+lần khởi động để ổn định trạng thái bộ nhớ đệm trước khi bắt đầu đo
+chính thức. Tiếp theo, 10.000 lần suy luận đơn mẫu được thực hiện trên
+CPU, không dùng GPU và không gom batch. Kịch bản này phản ánh điều kiện
+tệ nhất khi Transformer được dùng để kiểm tra trực tiếp trong luồng
+thực thi - tức là phải đưa ra phán quyết tức thì ngay sau mỗi window
+syscall mà không có khả năng xử lý nhiều window song song.
 
-\textbf{E3 — nginx live overhead.}
-Workload: nginx 1 worker process phục vụ file tĩnh 4~KB qua HTTP/1.1.
-Công cụ tải wrk chạy 4 thread, 100 connections, thời gian 60~giây. Hai
-điều kiện đo tuần tự trên cùng nginx instance: \emph{Baseline} (không
-eBPF) và \emph{DFA attached} (guepard-shield gắn vào tracepoint syscall
-entry). \texttt{perf stat} monitor PID của nginx worker — không phải
-master — để đo cycles và syscall count thực sự của process xử lý HTTP.
-Khi eBPF attach vào cùng tracepoint, counter syscall của perf trả về 0
-do conflict; syscall rate vì vậy được lấy từ điều kiện baseline:
+\textbf{E3 - Mức độ ảnh hưởng đến thông lượng nginx.}
+Thí nghiệm sử dụng nginx với một tiến trình worker phục vụ tệp tĩnh
+4~KB qua HTTP/1.1. Công cụ tạo tải wrk được cấu hình với 4 luồng và
+100 kết nối đồng thời, chạy liên tục trong 60~giây. Hai điều kiện đo
+được thực hiện tuần tự trên cùng một phiên nginx: điều kiện \emph{cơ
+sở} không gắn eBPF và điều kiện \emph{có DFA} khi guepard-shield gắn
+vào tracepoint lúc bắt đầu syscall. Lệnh \texttt{perf~stat} được trỏ
+vào PID của tiến trình worker - không phải tiến trình master - để đo số
+chu kỳ CPU và số lần gọi syscall thực sự của tiến trình xử lý HTTP.
+Tuy nhiên, khi eBPF gắn vào cùng tracepoint đó, bộ đếm syscall của
+\texttt{perf} trả về~0 do xung đột; vì vậy tốc độ syscall được lấy từ
+kết quả đo ở điều kiện cơ sở:
 $38{,}807{,}804 / 60 \approx 647{,}000$~syscalls/s.
 
-\subsection{E1 — Histogram Latency eBPF DFA}
+\subsection{E1 - Histogram Latency eBPF DFA}
 \label{subsec:p4_e1}
 
 \begin{table}[H]
-  \caption{Kết quả E1 — latency eBPF DFA theo hai điều kiện đo.}
+  \caption{Kết quả E1 - latency eBPF DFA theo hai điều kiện đo.}
   \label{tab:p4_e1}
   \centering
   \begin{tabular}{|l|c|c|}
@@ -1003,9 +1021,9 @@ $38{,}807{,}804 / 60 \approx 647{,}000$~syscalls/s.
     \textbf{Chỉ số} & \textbf{Standalone (all-process)} &
     \textbf{E3 embedded (nginx worker)} \\ \hline
     Số samples         & 1.189.670   & 34.550.232           \\ \hline
-    p50                & 100–200~ns  & \textbf{$<$100~ns}   \\ \hline
-    p99                & 2.700–2.800~ns & \textbf{100–200~ns} \\ \hline
-    p999               & $\geq$3.100~ns & \textbf{200–300~ns} \\ \hline
+    p50                & 100-200~ns  & \textbf{$<$100~ns}   \\ \hline
+    p99                & 2.700-2.800~ns & \textbf{100-200~ns} \\ \hline
+    p999               & $\geq$3.100~ns & \textbf{200-300~ns} \\ \hline
   \end{tabular}
 \end{table}
 
@@ -1018,21 +1036,20 @@ bằng phẳng; toàn bộ đuôi từ 200~ns đến $\geq$3.100~ns chỉ chiế
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[x=1.55cm, y=4.6cm]
-    \draw[->] (-0.15,0) -- (7.6,0) node[right] {Latency (ns)};
+  \begin{tikzpicture}[x=2cm, y=7cm]
+    \draw[->] (-0.15,0) -- (5.4,0) node[right] {Latency (ns)};
     \draw[->] (0,0) -- (0,1.12) node[above] {CDF};
     \foreach \y/\lab in
-    {0/{0\%},0.25/{25\%},0.50/{50\%},0.75/{75\%},0.9387/{93,87\%},1.00/{100\%}}
+    {0/{0\%},0.25/{25\%},0.50/{50\%},0.75/{75\%},1.00/{100\%}}
     \draw (-0.07,\y) -- (0.07,\y) node[left=4pt, font=\small] {\lab};
     \foreach \x/\lab in
-    {0/0,1/100,2/200,3/300,4/400,5/500,6/600,7/{$\geq$700}}
-    \draw (\x,-0.02) -- (\x,0.02) node[below=5pt, font=\small] {\lab};
+    {0/0,1/100,2/200,3/300,4/400,5/{$\geq$500}}
+    \draw (\x,-0.015) -- (\x,0.015) node[below=5pt, font=\small] {\lab};
 
     \fill[blue!10]
     (0,0) -- (1,0) -- (1,0.9387) -- (2,0.9387) -- (2,0.9989) --
     (3,0.9989) -- (3,0.9995) -- (4,0.9995) -- (4,0.9996) --
-    (5,0.9996) -- (5,0.9997) -- (6,0.9997) -- (6,0.9998) --
-    (7,0.9998) -- (7,0) -- cycle;
+    (5,0.9996) -- (5,0) -- cycle;
 
     \draw[blue!70, very thick]
     (0,0) --
@@ -1040,22 +1057,17 @@ bằng phẳng; toàn bộ đuôi từ 200~ns đến $\geq$3.100~ns chỉ chiế
     (2,0.9387) -- (2,0.9989) --
     (3,0.9989) -- (3,0.9995) --
     (4,0.9995) -- (4,0.9996) --
-    (5,0.9996) -- (5,0.9997) --
-    (6,0.9997) -- (6,0.9998) --
-    (7,0.9998);
+    (5,0.9996);
 
-    \draw[red!65, dashed] (0,0.9387) -- (7.4,0.9387);
-    \node[font=\small, red!65, right] at (7.4,0.9387) {93,87\%};
-    \draw[green!55!black, dashed] (0,0.9989) -- (7.4,0.9989);
-    \node[font=\small, green!55!black, right] at (7.4,0.9989) {99,89\%};
-    \draw[orange!80!black, dashed] (0,0.9995) -- (7.4,0.9995);
-    \node[font=\small, orange!80!black, right] at (7.4,0.9995) {99,95\%};
+    \draw[red!65, dashed] (0,0.9387) -- (5.2,0.9387);
+    \node[font=\small, red!65, right] at (5.2,0.9387) {93,87\%};
+    \draw[green!55!black, dashed] (0,0.9989) -- (5.2,0.9989);
+    \node[font=\small, green!55!black, right] at (5.2,0.9989) {99,89\%};
 
     \fill[red!65]     (1,0.9387) circle (2pt);
     \fill[green!55!black] (2,0.9989) circle (2pt);
-    \fill[orange!80!black] (3,0.9995) circle (2pt);
 
-    \node[font=\small, align=left] at (5.0,0.55)
+    \node[font=\small, align=left] at (3.2,0.45)
     {p50 $<$ 100~ns\\p99 $\in$ [100, 200)~ns\\p999 $\in$ [200, 300)~ns};
   \end{tikzpicture}
   \caption{CDF latency eBPF DFA trong điều kiện E3 embedded
@@ -1071,9 +1083,9 @@ pattern syscall đồng đều (\texttt{epoll\_wait}, \texttt{recvfrom},
 \texttt{sendto}), \texttt{PROCESS\_STATE} HashMap chỉ có một entry duy
 nhất nên lookup nhanh và ít cache miss hơn. Điều kiện standalone thu
 thập syscall từ nhiều process khác nhau, dẫn tới HashMap có nhiều
-entry, xác suất cache miss cao hơn và p99 tăng lên 2.700–2.800~ns.
+entry, xác suất cache miss cao hơn và p99 tăng lên 2.700-2.800~ns.
 
-\subsection{E2 — Latency Transformer CPU}
+\subsection{E2 - Latency Transformer CPU}
 \label{subsec:p4_e2}
 
 Transformer cần forward pass qua 4 lớp attention với $d_{\text{model}}=128$
@@ -1082,7 +1094,7 @@ batch, phản ánh điều kiện worst-case thực tế cho inline enforcement 
 cần đưa ra phán quyết ngay sau mỗi window mà không gom batch.
 
 \begin{table}[h!]
-  \caption{Kết quả E2 — latency single-sample Transformer inference trên
+  \caption{Kết quả E2 - latency single-sample Transformer inference trên
   CPU (10.000 mẫu, 100 warmup).}
   \label{tab:p4_e2}
   \centering
@@ -1096,11 +1108,11 @@ cần đưa ra phán quyết ngay sau mỗi window mà không gom batch.
   \end{tabular}
 \end{table}
 
-\subsection{E3 — Overhead Throughput nginx}
+\subsection{E3 - Overhead Throughput nginx}
 \label{subsec:p4_e3}
 
 \begin{table}[h!]
-  \caption{Kết quả E3 — overhead throughput nginx live workload, đo hai
+  \caption{Kết quả E3 - overhead throughput nginx live workload, đo hai
   điều kiện tuần tự trên cùng nginx instance.}
   \label{tab:p4_e3}
   \centering
@@ -1114,12 +1126,21 @@ cần đưa ra phán quyết ngay sau mỗi window mà không gom batch.
     & $+11{,}9\%$         \\ \hline
     Cycles/60~s (worker)      & $230{,}7\times10^9$ &
     $224{,}3\times10^9$ & $-2{,}8\%$          \\ \hline
-    Syscalls/s (worker)       & 647.000             & —
+    Syscalls/s (worker)       & 647.000             & -
     & (perf conflict)     \\ \hline
   \end{tabular}
 \end{table}
 
-\begin{figure}[H]
+Overhead 10,97\% xuất hiện do eBPF tracepoint thực thi \emph{đồng bộ}
+trong kernel path - mỗi syscall của nginx worker bị trễ thêm latency
+DFA ($<$100~ns) trước khi kernel hoàn thành. Với 647.000~syscalls/s,
+tổng thời gian eBPF tích lũy xấp xỉ $65$~ms/s, gây hiệu ứng
+serialization trên syscall entry của process đơn luồng. Cycles của
+worker \emph{giảm} 2,8\% vì worker xử lý ít HTTP transaction hơn -
+chi phí eBPF nằm trong kernel overhead và không phản ánh vào counter
+process-level.
+
+\begin{figure}[h!]
   \centering
   \begin{tikzpicture}[x=2.4cm, y=0.000085cm]
     \draw[->] (0,0) -- (3.2,0) node[right] {Điều kiện};
@@ -1149,16 +1170,6 @@ cần đưa ra phán quyết ngay sau mỗi window mà không gom batch.
   \label{fig:p4_e3_throughput}
 \end{figure}
 
-Overhead 10,97\% cao hơn mục tiêu $<$5\% đặt ra trong thiết kế. Nguyên
-nhân: eBPF tracepoint thực thi \emph{đồng bộ} trong kernel path — mỗi
-syscall của nginx worker bị trễ thêm latency DFA ($<$100~ns) trước khi
-kernel hoàn thành. Với 647.000~syscalls/s, tổng thời gian eBPF tích lũy
-xấp xỉ $65$~ms/s, gây hiệu ứng serialization trên syscall entry của
-process đơn luồng. Cycles của
-worker \emph{giảm} 2,8\% vì worker xử lý ít HTTP transaction hơn —
-chi phí eBPF nằm trong kernel overhead và không phản ánh vào counter
-process-level.
-
 \subsection{So sánh tổng hợp}
 \label{subsec:p4_comparison}
 
@@ -1175,7 +1186,7 @@ là:
 
 Con số này vượt hoàn toàn khả năng của bất kỳ thiết lập inline
 enforcement thực tế nào. Ngược lại, chi phí eBPF DFA ước tính
-$\approx 65$~ms/s tương đương 0,065~core — ít hơn Transformer khoảng
+$\approx 65$~ms/s tương đương 0,065~core - ít hơn Transformer khoảng
 286 lần ở cùng workload. Bảng~\ref{tab:p4_comparison} tổng hợp so sánh
 đầy đủ giữa hai phương án.
 
@@ -1191,13 +1202,13 @@ $\approx 65$~ms/s tương đương 0,065~core — ít hơn Transformer khoảng
       \textbf{Tỷ lệ} \\ \hline
       p50 latency / window & $<$100~ns       & 1.843.051~ns &
       $>$18.000$\times$ \\ \hline
-      p99 latency / window & 100–200~ns      & 3.004.179~ns &
+      p99 latency / window & 100-200~ns      & 3.004.179~ns &
       $>$15.000$\times$ \\ \hline
-      p999 latency / window & 200–300~ns     & 3.982.026~ns &
+      p999 latency / window & 200-300~ns     & 3.982.026~ns &
       $>$13.000$\times$ \\ \hline
       CPU cores @ 647k sys/s & $\approx$0,07 & $\approx$18,6 &
       infeasible       \\ \hline
-      nginx throughput overhead & 10,97\%    & $>$100\%      & —
+      nginx throughput overhead & 10,97\%    & $>$100\%      & -
       \\ \hline
     \end{tabular}
   }
@@ -1252,16 +1263,13 @@ Transformer cần forward pass qua 4 lớp attention với $d_{\text{model}}=128
   \label{fig:p4_latency_log}
 \end{figure}
 
-\textbf{Overhead 11\% trong bối cảnh thiết kế.}
-Overhead 10,97\% vượt mục tiêu $<$5\%, nhưng phải được đọc đúng bối
-cảnh. Trong cấu hình thí nghiệm, DFA monitor \emph{100\% syscalls} của
-nginx worker mà không có sampling. Nếu áp dụng sampling $\frac{1}{10}$
-(chỉ evaluate mỗi window thứ 10), overhead ước tính giảm về
-$\approx$1\%. Quan trọng hơn, phương án Transformer cần 18,6~core và
-hoàn toàn không thể thực thi inline — overhead 11\% của DFA là lựa
-chọn khả thi duy nhất. Khoảng cách tính toán giữa hai phương án là
-$>18{,}000\times$ ở p50 latency; đây là luận cứ định lượng trung tâm
-của Giai đoạn 4.
+\textbf{Overhead 11\% trong bối cảnh triển khai.}
+Overhead 10,97\% phản ánh điều kiện thí nghiệm khi DFA giám sát toàn
+bộ luồng syscall của nginx worker. Trong khi đó, phương án Transformer
+cần 18,6~core và hoàn toàn không thể thực thi inline - overhead 11\%
+của DFA là lựa chọn khả thi duy nhất. Khoảng cách tính toán giữa hai
+phương án là $>18{,}000\times$ ở p50 latency; đây là luận cứ định lượng
+trung tâm của Giai đoạn 4.
 
 \section{Thảo luận tổng hợp}
 \label{sec:ch5_discussion}
@@ -1307,7 +1315,7 @@ chi phí vận hành. eBPF DFA hoàn thành mỗi syscall lookup trong dưới
 100~ns tại p50, nhanh hơn Transformer inference CPU hơn 18.000 lần ở
 cùng phân vị. Tại workload nginx 647.000~syscalls/s, Transformer sẽ
 cần $\approx$18,6~CPU core chỉ để theo kịp luồng syscall của một
-process đơn lẻ — hoàn toàn không khả thi cho inline enforcement. eBPF
+process đơn lẻ - hoàn toàn không khả thi cho inline enforcement. eBPF
 DFA thực hiện cùng nhiệm vụ với $\approx$0,07~core, đổi lại chi phí
 overhead throughput 10,97\% trong điều kiện không có sampling. Hai con
 số này, đặt cạnh nhau, xác nhận luận cứ kiến trúc cốt lõi của luận

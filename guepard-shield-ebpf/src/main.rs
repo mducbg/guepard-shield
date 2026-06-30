@@ -4,15 +4,16 @@
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_ktime_get_ns},
     macros::{map, tracepoint},
-    maps::{Array, HashMap, PerCpuArray, RingBuf},
+    maps::{Array, HashMap, PerCpuArray},
     programs::TracePointContext,
 };
-use guepard_shield_common::{DfaEvent, TransitionRow};
+use guepard_shield_common::TransitionRow;
 
 const START_STATE: u32 = 59;
 
-const KIND_SUSPECT: u8 = 1;
-const KIND_ATTACK: u8 = 2;
+const CLASS_NORMAL: u32 = 0;
+const CLASS_SUSPECT: u32 = 1;
+const CLASS_ATTACK: u32 = 2;
 
 #[map]
 static TRANSITION_TABLE: Array<TransitionRow> = Array::with_max_entries(64, 0);
@@ -35,9 +36,9 @@ static TARGET_TGID: Array<u32> = Array::with_max_entries(1, 0);
 #[map]
 static LATENCY_HIST: PerCpuArray<u64> = PerCpuArray::with_max_entries(32, 0);
 
-/// Ring buffer for SUSPECT and ATTACK events forwarded to the Rust agent.
+/// Per-class counters. Per-CPU values avoid atomic increments in the syscall path.
 #[map]
-static EVENTS: RingBuf = RingBuf::with_byte_size(1 << 17, 0);
+static CLASS_COUNTS: PerCpuArray<u64> = PerCpuArray::with_max_entries(3, 0);
 
 #[tracepoint]
 pub fn guepard_shield(ctx: TracePointContext) -> u32 {
@@ -92,7 +93,7 @@ fn try_guepard_shield(ctx: TracePointContext, tgid: u32) -> Result<u32, u32> {
     let next_state = row.dst[idx];
     if next_state == -1 {
         // ATTACK: no valid transition for (state, token) — DFA rejects this sequence.
-        emit_event(tgid, state, idx as u32, u32::MAX, KIND_ATTACK);
+        increment_class(CLASS_ATTACK);
         PROCESS_STATE.insert(&tgid, &START_STATE, 0).ok();
         return Ok(0);
     }
@@ -103,23 +104,19 @@ fn try_guepard_shield(ctx: TracePointContext, tgid: u32) -> Result<u32, u32> {
     // SUSPECT: next state is a low-frequency state (rare but seen in training).
     let class = STATE_CLASS.get(next_u32).copied().unwrap_or(0);
     if class == 1 {
-        emit_event(tgid, state, idx as u32, next_u32, KIND_SUSPECT);
+        increment_class(CLASS_SUSPECT);
+    } else {
+        increment_class(CLASS_NORMAL);
     }
 
     Ok(0)
 }
 
 #[inline(always)]
-fn emit_event(tgid: u32, state: u32, token: u32, next_state: u32, kind: u8) {
-    let event = DfaEvent {
-        tgid,
-        state,
-        token,
-        next_state,
-        kind,
-        _pad: [0; 3],
-    };
-    EVENTS.output::<DfaEvent>(&event, 0).ok();
+fn increment_class(class: u32) {
+    if let Some(count) = CLASS_COUNTS.get_ptr_mut(class) {
+        unsafe { *count += 1 };
+    }
 }
 
 #[cfg(not(test))]

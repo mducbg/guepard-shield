@@ -168,9 +168,14 @@ def load_start_state(config_name: str) -> int:
     """Read the start state saved by build_dfa.py."""
     parts = config_name.split("_")
     K = int(parts[0][1:])
-    start_path = CLUSTER_DIR / f"K{K}" / "start_state.txt"
-    if start_path.exists():
-        return int(start_path.read_text().strip())
+    cluster_dir = CLUSTER_DIR / f"K{K}"
+    # Older phase-3 runs persisted this artifact with the S1 suffix even
+    # when the selected export is S3. Prefer the canonical filename but do
+    # not silently change the evaluated DFA start state to zero.
+    for name in ("start_state.txt", "start_state_s1.txt"):
+        start_path = cluster_dir / name
+        if start_path.exists():
+            return int(start_path.read_text().strip())
     # Fallback: use the most frequent state overall.
     return 0
 

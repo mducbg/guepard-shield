@@ -9,9 +9,9 @@ Các máy chủ Linux thường trở thành mục tiêu của các hành vi sau
 nhập như leo thang đặc
 quyền, thiết lập kết nối ngược hay đánh cắp dữ liệu. Vì các hành vi
 này đều phải tương tác
-với nhân hệ điều hành qua lời gọi hệ thống (syscall), chuỗi syscall
+với nhân hệ điều hành qua lời gọi hệ thống (\gls{syscall}), chuỗi \gls{syscall}
 là nguồn quan sát quan
-trọng cho các hệ thống phát hiện xâm nhập trên máy chủ (HIDS). Tuy
+trọng cho các \gls{hids}. Tuy
 nhiên, các hướng tiếp
 cận hiện tại đối mặt với một khoảng cách thực thi chính sách
 (enforcement gap): các mô hình
@@ -21,35 +21,34 @@ trong kernel, trong khi các công cụ luật tĩnh như Falco hay Tetragon
 có chi phí thấp nhưng
 phụ thuộc vào tri thức chuyên gia và khó bao phủ đầy đủ các biến thể tấn công.
 
-Luận văn đề xuất Guepard Shield, một hệ thống HIDS lai lấp khoảng
+Luận văn đề xuất Guepard Shield, một \gls{hids} lai lấp khoảng
 trống đó bằng cách tách
 giai đoạn học biểu diễn ngoại tuyến ra khỏi giai đoạn thực thi thời
 gian thực. Hướng tiếp
-cận là chưng cất tri thức từ Transformer Teacher sang một automata
-hữu hạn đơn định (DFA)
-Student đủ nhỏ để nạp vào BPF map và truy vấn với độ phức tạp $O(1)$
-mỗi syscall. DFA vừa
-phù hợp với ràng buộc của eBPF Verifier, vừa bảo toàn tri thức ngữ
+cận là chưng cất tri thức từ Transformer Teacher sang một \gls{dfa}
+Student đủ nhỏ để nạp vào \gls{bpf} map và truy vấn với độ phức tạp $O(1)$
+mỗi \gls{syscall}. \Gls{dfa} vừa
+phù hợp với ràng buộc của \gls{ebpf} Verifier, vừa bảo toàn tri thức ngữ
 cảnh mà Teacher đã học.
 
-Pipeline gồm bốn giai đoạn: token hóa tên syscall và tạo cửa sổ trượt
+Pipeline gồm bốn giai đoạn: token hóa tên \gls{syscall} và tạo cửa sổ trượt
 (Giai đoạn~1),
 huấn luyện Decoder-only Transformer trên dữ liệu bình thường (Giai
 đoạn~2), rời rạc hóa
-vector trạng thái ẩn bằng K-Means để xây dựng bảng chuyển DFA (Giai
+vector trạng thái ẩn bằng K-Means để xây dựng bảng chuyển \gls{dfa} (Giai
 đoạn~3), và nạp bảng
-chuyển vào BPF map để thực thi qua eBPF (Giai đoạn~4).
+chuyển vào \gls{bpf} map để thực thi qua \gls{ebpf} (Giai đoạn~4).
 
-Thực nghiệm trên LID-DS-2021 cho thấy Teacher đạt AUROC = 0.8503 và
-PR-AUC = 0.7093 trên
+Thực nghiệm trên \gls{lid-ds}-2021 cho thấy Teacher đạt \gls{auroc} = 0.8503 và
+\gls{pr-auc} = 0.7093 trên
 gần 100 triệu window kiểm thử không dùng nhãn tấn công khi huấn
-luyện. DFA Student tại
+luyện. \Gls{dfa} Student tại
 $K = 64$ tạo ra 64 trạng thái và 1.973 bước chuyển (~204~KB), đạt tỷ
 lệ phát hiện cấp độ
 bản ghi 90.85\%, tỷ lệ báo động giả 1.41\% và fidelity 98.12\% so với
 Teacher, xác nhận
-tính khả thi của hướng chưng cất Transformer sang DFA cho bài toán
-giám sát syscall
+tính khả thi của hướng chưng cất Transformer sang \gls{dfa} cho bài toán
+giám sát \gls{syscall}
 thời gian thực.
 \begin{flushright}
   \begin{tabular}{@{}c@{}}

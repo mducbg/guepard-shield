@@ -1,14 +1,15 @@
 use std::collections::HashMap as StdHashMap;
 
-use aya::maps::{Array, PerCpuArray, RingBuf};
+use aya::maps::{Array, PerCpuArray};
 use aya::programs::TracePoint;
 use clap::Parser;
 #[rustfmt::skip]
 use log::{debug, warn};
 use serde::Deserialize;
 use tokio::signal;
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
-use guepard_shield_common::{DfaEvent, TransitionRow};
+use guepard_shield_common::TransitionRow;
 
 #[derive(Parser)]
 struct Opt {
@@ -134,40 +135,6 @@ async fn main() -> anyhow::Result<()> {
     )?;
     target_tgid.set(0, opt.target_tgid.unwrap_or(0), 0)?;
 
-    // Spawn event reader task before attaching the tracepoint.
-    let ring_buf_map = ebpf
-        .take_map("EVENTS")
-        .ok_or_else(|| anyhow::anyhow!("map EVENTS not found"))?;
-    let ring_buf: RingBuf<_> = ring_buf_map.try_into()?;
-    let mut async_ring = tokio::io::unix::AsyncFd::new(ring_buf)?;
-    tokio::task::spawn(async move {
-        loop {
-            let mut guard = match async_ring.readable_mut().await {
-                Ok(g) => g,
-                Err(_) => break,
-            };
-            let rb = guard.get_inner_mut();
-            while let Some(item) = rb.next() {
-                if item.len() >= core::mem::size_of::<DfaEvent>() {
-                    let ev: DfaEvent =
-                        unsafe { core::ptr::read_unaligned(item.as_ptr() as *const DfaEvent) };
-                    match ev.kind {
-                        1 => log::info!(
-                            "[SUSPECT] tgid={} state={} --token={}--> state={}",
-                            ev.tgid, ev.state, ev.token, ev.next_state
-                        ),
-                        2 => log::warn!(
-                            "[ATTACK]  tgid={} state={} token={} (no transition)",
-                            ev.tgid, ev.state, ev.token
-                        ),
-                        _ => {}
-                    }
-                }
-            }
-            guard.clear_ready();
-        }
-    });
-
     let n_transitions: usize = config
         .transition_table
         .iter()
@@ -180,12 +147,26 @@ async fn main() -> anyhow::Result<()> {
     program.attach("raw_syscalls", "sys_enter")?;
 
     println!(
-        "DFA loaded: {} states, {} transitions. Monitoring...",
+        "DFA loaded: {} states, {} transitions. Monitoring; printing NORMAL/SUSPECT/ATTACK every second.",
         config.n_states, n_transitions
     );
 
-    let ctrl_c = signal::ctrl_c();
-    ctrl_c.await?;
+    let mut previous_counts = [0u64; 3];
+    let mut elapsed_seconds = 0u64;
+    let mut summary_timer = interval(Duration::from_secs(1));
+    summary_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    summary_timer.tick().await;
+    loop {
+        tokio::select! {
+            _ = signal::ctrl_c() => break,
+            _ = summary_timer.tick() => {
+                let counts = read_class_counts(&ebpf)?;
+                elapsed_seconds += 1;
+                print_class_summary(elapsed_seconds, previous_counts, counts);
+                previous_counts = counts;
+            }
+        }
+    }
     println!("Exiting...");
 
     // Dump latency histogram collected during run.
@@ -208,6 +189,40 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn read_class_counts(ebpf: &aya::Ebpf) -> anyhow::Result<[u64; 3]> {
+    let map_ref = ebpf
+        .map("CLASS_COUNTS")
+        .ok_or_else(|| anyhow::anyhow!("map CLASS_COUNTS not found"))?;
+    let counts_map = PerCpuArray::<_, u64>::try_from(map_ref)?;
+    let mut counts = [0u64; 3];
+    for class in 0..3u32 {
+        counts[class as usize] = counts_map.get(&class, 0)?.iter().sum();
+    }
+    Ok(counts)
+}
+
+fn print_class_summary(elapsed_seconds: u64, previous: [u64; 3], current: [u64; 3]) {
+    println!("{}", format_class_summary(elapsed_seconds, previous, current));
+}
+
+fn format_class_summary(
+    elapsed_seconds: u64,
+    previous: [u64; 3],
+    current: [u64; 3],
+) -> String {
+    let normal = current[0].saturating_sub(previous[0]);
+    let suspect = current[1].saturating_sub(previous[1]);
+    let attack = current[2].saturating_sub(previous[2]);
+    format!(
+        "[live {:02}s] total={} | NORMAL={} | SUSPECT={} | ATTACK={}",
+        elapsed_seconds,
+        normal + suspect + attack,
+        normal,
+        suspect,
+        attack,
+    )
 }
 
 fn format_latency_histogram(counts: &[u64; 32]) -> String {
@@ -257,4 +272,17 @@ fn format_latency_histogram(counts: &[u64; 32]) -> String {
     }
 
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_class_summary;
+
+    #[test]
+    fn class_summary_reports_counter_delta() {
+        assert_eq!(
+            format_class_summary(12, [10, 20, 30], [15, 22, 33]),
+            "[live 12s] total=10 | NORMAL=5 | SUSPECT=2 | ATTACK=3",
+        );
+    }
 }

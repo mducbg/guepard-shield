@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # E3 - nginx live overhead benchmark.
-# Usage: sudo bash notebooks/p4/run_e3.sh <path-to-dfa-config>
+# Usage: sudo bash notebooks/p4/run_e3.sh
 
 set -euo pipefail
 
@@ -10,13 +10,13 @@ RESULTS_DIR="$PROJECT_ROOT/results/p4"
 
 if [[ "${E3_CAPTURE:-0}" != "1" ]]; then
     mkdir -p "$RESULTS_DIR"
-    E3_CAPTURE=1 bash "$0" "$@" 2>&1 | tee "$RESULTS_DIR/e3_summary.txt"
+    E3_CAPTURE=1 bash "$0" 2>&1 | tee "$RESULTS_DIR/e3_summary.txt"
     exit "${PIPESTATUS[0]}"
 fi
 
 cd "$PROJECT_ROOT"
 
-DFA_CONFIG="${1:-results/p3/dfa_config.json}"
+DFA_CONFIG="results/p3/dfa_config.json"
 WRK_DURATION=60
 WRK_THREADS=4
 WRK_CONNECTIONS=100
